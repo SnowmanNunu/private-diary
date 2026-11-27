@@ -85,10 +85,10 @@
                         <p>{!! $highlight->text(\Illuminate\Support\Str::limit(trim(preg_replace('/\s+/', ' ', strip_tags($entry->body ?? ''))), 120), $keyword) !!}</p>
                         <div class="entry-flags">
                             @if ($entry->mood)
-                                <a class="mood-chip mood-{{ $entry->mood }}" href="{{ route('diary.index', ['mood' => $entry->mood]) }}">{{ $moods[$entry->mood] ?? $entry->mood }}</a>
+                                <a class="mood-chip mood-{{ $entry->mood }}" href="{{ route('diary.index', ['mood' => $entry->mood]) }}">{!! $icons->mood($entry->mood) !!}<span>{{ $moods[$entry->mood] ?? $entry->mood }}</span></a>
                             @endif
                             @if ($entry->weather)
-                                <a class="weather-chip" href="{{ route('diary.index', ['weather' => $entry->weather]) }}">{{ $weathers[$entry->weather] ?? $entry->weather }}</a>
+                                <a class="weather-chip" href="{{ route('diary.index', ['weather' => $entry->weather]) }}">{!! $icons->weather($entry->weather) !!}<span>{{ $weathers[$entry->weather] ?? $entry->weather }}</span></a>
                             @endif
                         </div>
                         <div class="tag-list">

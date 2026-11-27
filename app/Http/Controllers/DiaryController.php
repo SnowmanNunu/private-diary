@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Entry;
 use App\Models\Tag;
+use App\Services\DiaryIcons;
 use App\Services\EntrySearch;
 use App\Services\Highlight;
 use App\Services\LastYearReview;
@@ -21,6 +22,7 @@ class DiaryController extends Controller
         private EntrySearch $search,
         private LastYearReview $review,
         private Highlight $highlight,
+        private DiaryIcons $icons,
     ) {
     }
 
@@ -79,6 +81,7 @@ class DiaryController extends Controller
             'moods' => config('diary.moods'),
             'weathers' => config('diary.weather'),
             'highlight' => $this->highlight,
+            'icons' => $this->icons,
             'lastYearEntry' => $this->review->today(),
             'tags' => Tag::where('user_id', Auth::id())
                 ->withCount('entries')
@@ -98,6 +101,7 @@ class DiaryController extends Controller
             'entry' => $entry,
             'moods' => config('diary.moods'),
             'weathers' => config('diary.weather'),
+            'icons' => $this->icons,
         ]);
     }
 
@@ -113,6 +117,7 @@ class DiaryController extends Controller
         return view('diary.show', [
             'entry' => $entry,
             'html' => $this->markdown->render($entry->body),
+            'icons' => $this->icons,
             'lastYearEntry' => $this->review->for($date),
         ]);
     }

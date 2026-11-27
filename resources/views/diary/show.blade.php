@@ -20,10 +20,10 @@
             <a class="tag" href="{{ route('diary.index', ['tag' => $tag->name]) }}">{{ $tag->name }}</a>
         @endforeach
         @if ($entry->mood)
-            <span class="mood-chip mood-{{ $entry->mood }}">{{ config('diary.moods.'.$entry->mood, $entry->mood) }}</span>
+            <span class="mood-chip mood-{{ $entry->mood }}">{!! $icons->mood($entry->mood) !!}<span>{{ config('diary.moods.'.$entry->mood, $entry->mood) }}</span></span>
         @endif
         @if ($entry->weather)
-            <span class="weather-chip">{{ config('diary.weather.'.$entry->weather, $entry->weather) }}</span>
+            <span class="weather-chip">{!! $icons->weather($entry->weather) !!}<span>{{ config('diary.weather.'.$entry->weather, $entry->weather) }}</span></span>
         @endif
         @if ($entry->status === 'draft')
             <span class="tag">草稿</span>

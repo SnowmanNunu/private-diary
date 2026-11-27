@@ -8,6 +8,7 @@ use App\Http\Controllers\ImportController;
 use App\Http\Controllers\SecurityController;
 use App\Http\Controllers\StatsController;
 use App\Http\Controllers\SessionController;
+use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\TwoFactorController;
 use App\Http\Middleware\EnsureTwoFactorIsVerified;
 use Illuminate\Support\Facades\Route;
@@ -43,6 +44,11 @@ Route::middleware(['auth', EnsureTwoFactorIsVerified::class])->group(function ()
     Route::post('/security/two-factor/recovery-codes', [TwoFactorController::class, 'regenerateRecoveryCodes'])
         ->middleware('throttle:6,1')
         ->name('two-factor.recovery-codes');
+
+    Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
+    Route::put('/settings', [SettingsController::class, 'update'])->name('settings.update');
+    Route::post('/settings/test-storage', [SettingsController::class, 'testStorage'])->name('settings.test-storage');
+    Route::post('/settings/backup-now', [SettingsController::class, 'backupNow'])->name('settings.backup-now');
 
     Route::get('/diary', [DiaryController::class, 'index'])->name('diary.index');
     Route::get('/diary/create', [DiaryController::class, 'create'])->name('diary.create');

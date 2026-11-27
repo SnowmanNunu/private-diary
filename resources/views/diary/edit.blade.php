@@ -40,20 +40,37 @@
         </div>
 
         <div class="field-row field-row-options">
-            <label for="entry-mood">心情</label>
-            <select id="entry-mood" name="mood" class="select-input">
-                <option value="">未记录</option>
+            <span class="field-label">心情</span>
+            <div class="icon-option-group" role="radiogroup" aria-label="心情">
+                @php($currentMood = old('mood', $entry?->mood))
+                <label class="icon-option">
+                    <input type="radio" name="mood" value="" @checked($currentMood === null || $currentMood === '')>
+                    <span class="icon-option-body">未记录</span>
+                </label>
                 @foreach ($moods as $key => $label)
-                    <option value="{{ $key }}" @selected(old('mood', $entry?->mood) === $key)>{{ $label }}</option>
+                    <label class="icon-option mood-{{ $key }}">
+                        <input type="radio" name="mood" value="{{ $key }}" @checked($currentMood === $key)>
+                        <span class="icon-option-body">{!! $icons->mood($key) !!}<span>{{ $label }}</span></span>
+                    </label>
                 @endforeach
-            </select>
-            <label for="entry-weather">天气</label>
-            <select id="entry-weather" name="weather" class="select-input">
-                <option value="">未记录</option>
+            </div>
+        </div>
+
+        <div class="field-row field-row-options">
+            <span class="field-label">天气</span>
+            <div class="icon-option-group" role="radiogroup" aria-label="天气">
+                @php($currentWeather = old('weather', $entry?->weather))
+                <label class="icon-option">
+                    <input type="radio" name="weather" value="" @checked($currentWeather === null || $currentWeather === '')>
+                    <span class="icon-option-body">未记录</span>
+                </label>
                 @foreach ($weathers as $key => $label)
-                    <option value="{{ $key }}" @selected(old('weather', $entry?->weather) === $key)>{{ $label }}</option>
+                    <label class="icon-option weather-{{ $key }}">
+                        <input type="radio" name="weather" value="{{ $key }}" @checked($currentWeather === $key)>
+                        <span class="icon-option-body">{!! $icons->weather($key) !!}<span>{{ $label }}</span></span>
+                    </label>
                 @endforeach
-            </select>
+            </div>
         </div>
 
         <div class="editor-grid" id="editor-grid">
@@ -118,8 +135,6 @@
     const form = document.getElementById('editor-form');
     const title = document.getElementById('entry-title');
     const tags = document.getElementById('entry-tags');
-    const mood = document.getElementById('entry-mood');
-    const weather = document.getElementById('entry-weather');
     const body = document.getElementById('entry-body');
     const state = document.getElementById('save-state');
     const previewPane = document.getElementById('preview-pane');
@@ -147,6 +162,11 @@
         return response.json();
     }
 
+    function selectedValue(name) {
+        const checked = document.querySelector('input[name="' + name + '"]:checked');
+        return checked ? checked.value : '';
+    }
+
     function scheduleSave() {
         state.textContent = '正在保存…';
         clearTimeout(timer);
@@ -155,8 +175,8 @@
                 const data = await postJson(form.action, {
                     title: title.value,
                     tags: tags.value,
-                    mood: mood.value,
-                    weather: weather.value,
+                    mood: selectedValue('mood'),
+                    weather: selectedValue('weather'),
                     body: body.value,
                     autosave: true,
                 });
@@ -185,7 +205,8 @@
         schedulePreview();
     }));
 
-    [mood, weather].forEach((el) => el.addEventListener('change', scheduleSave));
+    document.querySelectorAll('input[name="mood"], input[name="weather"]')
+        .forEach((el) => el.addEventListener('change', scheduleSave));
 
     previewToggle.addEventListener('click', async () => {
         const showing = !previewPane.hidden;

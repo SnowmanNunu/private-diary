@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', config('app.name'))</title>
-    <link rel="stylesheet" href="{{ asset('css/app.css') }}?v=2">
+    <link rel="stylesheet" href="{{ asset('css/app.css') }}?v=3">
 </head>
 <body>
 <div class="shell">
@@ -20,6 +20,7 @@
                 <a class="{{ request()->routeIs('diary.calendar') ? 'active' : '' }}" href="{{ route('diary.calendar') }}">日历</a>
                 <a class="{{ request()->routeIs('diary.stats') ? 'active' : '' }}" href="{{ route('diary.stats') }}">统计</a>
                 <a class="{{ request()->routeIs('diary.export', 'diary.import*') ? 'active' : '' }}" href="{{ route('diary.export') }}">导出</a>
+                <a class="{{ request()->routeIs('settings.*') ? 'active' : '' }}" href="{{ route('settings.index') }}">设置</a>
                 <a class="{{ request()->routeIs('security.*', 'two-factor.*') ? 'active' : '' }}" href="{{ route('security.index') }}">安全</a>
                 <a class="{{ request()->routeIs('diary.create', 'diary.store') ? 'active' : '' }}" href="{{ route('diary.create') }}">写今天</a>
                 <form method="POST" action="{{ route('logout') }}">
