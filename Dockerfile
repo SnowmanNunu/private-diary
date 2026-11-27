@@ -22,6 +22,23 @@ RUN apk add --no-cache libzip-dev oniguruma-dev \
        done \
     && apk del .build-deps
 
+# LibreOffice converts legacy Office documents (doc/xls/ppt) to PDF for the
+# local preview feature. soffice runs headless; CJK fonts keep Chinese text
+# from turning into tofu. The binary is wired up via LIBREOFFICE_PATH in compose.
+# A wrapper resolves the real binary so we do not depend on the Alpine release's
+# exact symlink layout (/usr/bin/libreoffice vs /usr/lib/libreoffice/program/soffice).
+RUN apk add --no-cache libreoffice-impress libreoffice-writer libreoffice-calc \
+        font-noto-cjk \
+    && printf '%s\n' \
+        '#!/bin/sh' \
+        'for bin in /usr/bin/libreoffice /usr/bin/soffice /usr/lib/libreoffice/program/soffice; do' \
+        '    [ -x "$bin" ] && exec "$bin" "$@"' \
+        'done' \
+        'echo "LibreOffice binary not found" >&2; exit 1' \
+        > /usr/local/bin/soffice \
+    && chmod +x /usr/local/bin/soffice \
+    && (/usr/local/bin/soffice --version || true)
+
 WORKDIR /var/www/html
 
 COPY --from=vendor /app/vendor ./vendor

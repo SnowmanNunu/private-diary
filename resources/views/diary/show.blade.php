@@ -57,12 +57,16 @@
                             </a>
                             <div class="attachment-caption">{{ $attachment->original_name }}</div>
                         @else
-                            <a class="file-link" href="{{ route('attachments.show', $attachment) }}" target="_blank" rel="noopener">
+                            <a class="file-link" href="{{ route('attachments.preview', $attachment) }}" target="_blank" rel="noopener">
                                 <span class="file-icon">{{ $attachment->badge() }}</span>
                                 <span class="file-name">{{ $attachment->original_name }}</span>
                                 <span class="file-meta">{{ $attachment->sizeLabel() }}</span>
                             </a>
                         @endif
+                        <div class="attachment-actions">
+                            <a class="preview-link" href="{{ route('attachments.preview', $attachment) }}" target="_blank" rel="noopener">预览</a>
+                            <a class="download-link" href="{{ route('attachments.show', $attachment) }}" download>下载</a>
+                        </div>
                     </div>
                 @endforeach
             </div>

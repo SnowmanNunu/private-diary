@@ -1,5 +1,30 @@
 # 更新日志 / Changelog
 
+## [0.8.0] - 2026-11-27
+
+附件在线预览版本 / Attachment preview release.
+
+### Added
+
+- 全格式在线预览：点附件卡片「预览」在新页查看，全程本机解析，附件内容不发送给任何第三方
+  - 图片 / PDF：浏览器原生渲染
+  - TXT / CSV：服务端读取并按 UTF-8 / GB18030 / Big5 转码，CSV 渲染为表格，文本一律转义显示
+  - Word（docx）、Excel（xlsx）、PPT（pptx）：PHP 解析 OOXML 提取段落、单元格与每页文字
+  - ZIP：列出包内文件名
+- Docker 镜像内置 LibreOffice（`libreoffice-impress/writer/calc` + `font-noto-cjk`）与 `/usr/local/bin/soffice` wrapper，`app` / `scheduler` 注入 `LIBREOFFICE_PATH`，旧版 doc / xls / ppt 可本机转 PDF 预览
+- 上传接口返回 `preview_url`；编辑页与阅读页附件卡片、JS 动态上传卡片均加入「预览」入口
+- 新增 12 项预览测试（含 mock soffice 转换链路），全套 106 项通过（583 断言）
+
+### Security
+
+- XML 解析用 `local-name()` XPath + `LIBXML_NONET` 并拒绝 DOCTYPE / ENTITY，设大小 / 行数 / 单元格上限，防止恶意文档耗尽资源
+- 预览与转换后 PDF 均走鉴权路由且 `no-store`，仅所属用户可访问；删除附件时同步清理转换缓存
+- LibreOffice 转换进程显式指定可写 `HOME`，避免 www-data 用户配置目录不可写导致静默失败
+
+### Changed
+
+- CSS 升至 v7；`config/diary.php` 新增 `preview.libreoffice`，`.env.example` 新增 `LIBREOFFICE_PATH`，README 中英双语同步说明
+
 ## [0.7.0] - 2026-11-27
 
 文档附件版本 / Document attachments release.

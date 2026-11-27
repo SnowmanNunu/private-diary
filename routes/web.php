@@ -108,6 +108,12 @@ Route::middleware(['auth', EnsureTwoFactorIsVerified::class])->group(function ()
     Route::get('/attachments/{attachment}', [AttachmentController::class, 'show'])
         ->name('attachments.show');
 
+    Route::get('/attachments/{attachment}/preview', [AttachmentController::class, 'preview'])
+        ->name('attachments.preview');
+
+    Route::get('/attachments/{attachment}/preview-file', [AttachmentController::class, 'previewFile'])
+        ->name('attachments.preview-file');
+
     Route::delete('/attachments/{attachment}', [AttachmentController::class, 'destroy'])
         ->name('attachments.destroy');
 });

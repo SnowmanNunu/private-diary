@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Attachment;
 use App\Models\Entry;
 use App\Services\AttachmentTypes;
+use App\Services\DocumentPreview;
 use Carbon\Carbon;
 use Closure;
 use Illuminate\Http\Request;
@@ -86,6 +87,7 @@ class AttachmentController extends Controller
                     'badge' => $attachment->badge(),
                     'size' => (int) $attachment->size,
                     'url' => $url,
+                    'preview_url' => route('attachments.preview', $attachment),
                     'markdown' => $kind === 'image'
                         ? '!['.$attachment->original_name.']('.$url.')'
                         : '['.$attachment->original_name.']('.$url.')',
@@ -102,7 +104,7 @@ class AttachmentController extends Controller
         abort_unless(Storage::disk('local')->exists($attachment->path), 404);
 
         // 图片与 PDF 可在浏览器内预览；Word / Excel / PPT 等一律强制下载，
-        // 避免浏览器错误解析或执行文件内容。
+        // 避免浏览器错误解析或执行文件内容。预览页只读取解析后的文本，不依赖内联渲染。
         $disposition = $attachment->isImage() || $attachment->mime === 'application/pdf'
             ? 'inline'
             : 'attachment';
@@ -115,11 +117,41 @@ class AttachmentController extends Controller
         );
     }
 
-    public function destroy(Attachment $attachment)
+    public function preview(Attachment $attachment, DocumentPreview $preview)
+    {
+        abort_if($attachment->user_id !== Auth::id(), 404);
+        abort_unless(Storage::disk('local')->exists($attachment->path), 404);
+
+        $payload = $preview->preview($attachment);
+
+        return response()->view('attachments.preview', [
+            'attachment' => $attachment,
+            'preview' => $payload,
+        ])->header('Cache-Control', 'private, no-store');
+    }
+
+    public function previewFile(Attachment $attachment, DocumentPreview $preview)
+    {
+        abort_if($attachment->user_id !== Auth::id(), 404);
+
+        $path = $preview->previewPath($attachment);
+
+        abort_unless(Storage::disk('local')->exists($path), 404);
+
+        return Storage::disk('local')->response(
+            $path,
+            'preview.pdf',
+            ['Cache-Control' => 'private, no-store'],
+            'inline',
+        );
+    }
+
+    public function destroy(Attachment $attachment, DocumentPreview $preview)
     {
         abort_if($attachment->user_id !== Auth::id(), 404);
 
         Storage::disk('local')->delete($attachment->path);
+        $preview->deletePreview($attachment);
         $attachment->delete();
 
         return response()->json(['ok' => true]);

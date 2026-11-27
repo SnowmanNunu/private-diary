@@ -159,13 +159,14 @@
                     </a>
                     <div class="attachment-caption">{{ $attachment->original_name }}</div>
                 @else
-                    <a class="file-link" href="{{ route('attachments.show', $attachment) }}" target="_blank" rel="noopener">
+                    <a class="file-link" href="{{ route('attachments.preview', $attachment) }}" target="_blank" rel="noopener">
                         <span class="file-icon">{{ $attachment->badge() }}</span>
                         <span class="file-name">{{ $attachment->original_name }}</span>
                         <span class="file-meta">{{ $attachment->sizeLabel() }}</span>
                     </a>
                 @endif
                 <div class="attachment-actions">
+                    <a class="preview-link" href="{{ route('attachments.preview', $attachment) }}" target="_blank" rel="noopener">预览</a>
                     <button type="button" class="insert-image" data-markdown="{{ $attachment->markdown(route('attachments.show', $attachment)) }}">插入</button>
                     <button type="button" class="delete-image danger">移除</button>
                 </div>
@@ -444,8 +445,9 @@
         item.className = 'attachment-item' + (isFile ? ' attachment-file' : '');
         item.dataset.id = attachment.id;
         const safeUrl = escapeHtml(attachment.url);
+        const previewUrl = escapeHtml(attachment.preview_url || attachment.url);
         item.innerHTML = isFile
-            ? '<a class="file-link" href="' + safeUrl + '" target="_blank" rel="noopener">'
+            ? '<a class="file-link" href="' + previewUrl + '" target="_blank" rel="noopener">'
                 + '<span class="file-icon">' + escapeHtml(attachment.badge) + '</span>'
                 + '<span class="file-name">' + escapeHtml(attachment.name) + '</span>'
                 + '<span class="file-meta">' + formatSize(attachment.size) + '</span></a>'
@@ -454,6 +456,12 @@
 
         const actions = document.createElement('div');
         actions.className = 'attachment-actions';
+        const preview = document.createElement('a');
+        preview.className = 'preview-link';
+        preview.href = previewUrl;
+        preview.target = '_blank';
+        preview.rel = 'noopener';
+        preview.textContent = '预览';
         const insert = document.createElement('button');
         insert.type = 'button';
         insert.className = 'insert-image';
@@ -463,7 +471,7 @@
         remove.type = 'button';
         remove.className = 'delete-image danger';
         remove.textContent = '移除';
-        actions.append(insert, remove);
+        actions.append(preview, insert, remove);
         item.appendChild(actions);
         attachmentList.appendChild(item);
     }

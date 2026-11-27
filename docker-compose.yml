@@ -23,6 +23,7 @@ services:
       APP_DEBUG: "${APP_DEBUG:-false}"
       DB_DATABASE: /var/www/html/storage/database.sqlite
       MIGRATE: "1"
+      LIBREOFFICE_PATH: /usr/local/bin/soffice
     volumes:
       - ./.env:/var/www/html/.env
       - storage:/var/www/html/storage
@@ -37,6 +38,7 @@ services:
       APP_ENV: "${APP_ENV:-production}"
       APP_DEBUG: "${APP_DEBUG:-false}"
       DB_DATABASE: /var/www/html/storage/database.sqlite
+      LIBREOFFICE_PATH: /usr/local/bin/soffice
     volumes:
       - ./.env:/var/www/html/.env
       - storage:/var/www/html/storage
