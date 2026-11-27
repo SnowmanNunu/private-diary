@@ -51,7 +51,7 @@ class DiaryM3Test extends TestCase
 
         $payload = json_decode($response->streamedContent(), true, 512, JSON_THROW_ON_ERROR);
 
-        $this->assertSame('private-diary/1', $payload['format']);
+        $this->assertSame('private-diary/2', $payload['format']);
         $this->assertCount(1, $payload['entries']);
         $this->assertSame('2026-11-27', $payload['entries'][0]['date']);
         $this->assertSame('我的日记', $payload['entries'][0]['title']);

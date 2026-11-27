@@ -19,6 +19,8 @@ class Entry extends Model
         'title',
         'body',
         'status',
+        'mood',
+        'weather',
     ];
 
     protected function casts(): array

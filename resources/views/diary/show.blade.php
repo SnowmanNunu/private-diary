@@ -19,6 +19,12 @@
         @foreach ($entry->tags as $tag)
             <a class="tag" href="{{ route('diary.index', ['tag' => $tag->name]) }}">{{ $tag->name }}</a>
         @endforeach
+        @if ($entry->mood)
+            <span class="mood-chip mood-{{ $entry->mood }}">{{ config('diary.moods.'.$entry->mood, $entry->mood) }}</span>
+        @endif
+        @if ($entry->weather)
+            <span class="weather-chip">{{ config('diary.weather.'.$entry->weather, $entry->weather) }}</span>
+        @endif
         @if ($entry->status === 'draft')
             <span class="tag">草稿</span>
         @endif

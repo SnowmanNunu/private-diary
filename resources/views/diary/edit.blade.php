@@ -39,6 +39,23 @@
                    value="{{ old('tags', $entry?->tags->pluck('name')->implode(', ') ?? '') }}">
         </div>
 
+        <div class="field-row field-row-options">
+            <label for="entry-mood">心情</label>
+            <select id="entry-mood" name="mood" class="select-input">
+                <option value="">未记录</option>
+                @foreach ($moods as $key => $label)
+                    <option value="{{ $key }}" @selected(old('mood', $entry?->mood) === $key)>{{ $label }}</option>
+                @endforeach
+            </select>
+            <label for="entry-weather">天气</label>
+            <select id="entry-weather" name="weather" class="select-input">
+                <option value="">未记录</option>
+                @foreach ($weathers as $key => $label)
+                    <option value="{{ $key }}" @selected(old('weather', $entry?->weather) === $key)>{{ $label }}</option>
+                @endforeach
+            </select>
+        </div>
+
         <div class="editor-grid" id="editor-grid">
             <textarea name="body" id="entry-body" class="body-input"
                       placeholder="用 Markdown 写点什么……">{{ old('body', $entry?->body ?? '') }}</textarea>
@@ -101,6 +118,8 @@
     const form = document.getElementById('editor-form');
     const title = document.getElementById('entry-title');
     const tags = document.getElementById('entry-tags');
+    const mood = document.getElementById('entry-mood');
+    const weather = document.getElementById('entry-weather');
     const body = document.getElementById('entry-body');
     const state = document.getElementById('save-state');
     const previewPane = document.getElementById('preview-pane');
@@ -136,6 +155,8 @@
                 const data = await postJson(form.action, {
                     title: title.value,
                     tags: tags.value,
+                    mood: mood.value,
+                    weather: weather.value,
                     body: body.value,
                     autosave: true,
                 });
@@ -163,6 +184,8 @@
         scheduleSave();
         schedulePreview();
     }));
+
+    [mood, weather].forEach((el) => el.addEventListener('change', scheduleSave));
 
     previewToggle.addEventListener('click', async () => {
         const showing = !previewPane.hidden;

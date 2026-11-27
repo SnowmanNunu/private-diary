@@ -14,13 +14,15 @@ class DiaryExporter
     public function json(): string
     {
         $payload = [
-            'format' => 'private-diary/1',
+            'format' => 'private-diary/2',
             'exported_at' => now()->toIso8601String(),
             'entries' => $this->entries()->map(fn (Entry $entry) => [
                 'date' => $entry->entry_date->format('Y-m-d'),
                 'title' => $entry->title,
                 'body' => $entry->body,
                 'status' => $entry->status,
+                'mood' => $entry->mood,
+                'weather' => $entry->weather,
                 'tags' => $entry->tags->pluck('name')->all(),
                 'attachments' => $entry->attachments->map(fn (Attachment $attachment) => [
                     'id' => $attachment->id,
@@ -62,6 +64,8 @@ class DiaryExporter
                 '',
                 '- 日期：'.$entry->entry_date->format('Y-m-d'),
                 '- 状态：'.($entry->status === 'draft' ? '草稿' : '已发布'),
+                '- 心情：'.($entry->mood ? (config('diary.moods.'.$entry->mood) ?: $entry->mood) : '无'),
+                '- 天气：'.($entry->weather ? (config('diary.weather.'.$entry->weather) ?: $entry->weather) : '无'),
                 '- 标签：'.($entry->tags->isEmpty() ? '无' : $entry->tags->pluck('name')->implode(', ')),
                 '',
                 $this->rewriteAttachmentLinks($entry->body ?? '', $replacements),

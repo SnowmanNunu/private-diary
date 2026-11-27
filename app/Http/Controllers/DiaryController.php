@@ -5,12 +5,14 @@ namespace App\Http\Controllers;
 use App\Models\Entry;
 use App\Models\Tag;
 use App\Services\EntrySearch;
+use App\Services\Highlight;
 use App\Services\LastYearReview;
 use App\Services\Markdown;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 
 class DiaryController extends Controller
 {
@@ -18,6 +20,7 @@ class DiaryController extends Controller
         private Markdown $markdown,
         private EntrySearch $search,
         private LastYearReview $review,
+        private Highlight $highlight,
     ) {
     }
 
@@ -27,8 +30,19 @@ class DiaryController extends Controller
             ->with(['tags', 'attachments'])
             ->orderByDesc('entry_date');
 
+        $filters = $request->validate([
+            'mood' => ['nullable', Rule::in(array_keys(config('diary.moods')))],
+            'weather' => ['nullable', Rule::in(array_keys(config('diary.weather')))],
+            'from' => ['nullable', 'date_format:Y-m-d'],
+            'to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:from'],
+        ]);
+
         $keyword = trim($request->string('q')->toString());
         $tag = trim($request->string('tag')->toString());
+        $mood = $filters['mood'] ?? '';
+        $weather = $filters['weather'] ?? '';
+        $from = $filters['from'] ?? '';
+        $to = $filters['to'] ?? '';
 
         if ($keyword !== '') {
             $query->whereIn('id', $this->search->ids($keyword));
@@ -38,10 +52,33 @@ class DiaryController extends Controller
             $query->whereHas('tags', fn ($builder) => $builder->where('name', $tag));
         }
 
+        if ($mood !== '') {
+            $query->where('mood', $mood);
+        }
+
+        if ($weather !== '') {
+            $query->where('weather', $weather);
+        }
+
+        if ($from !== '') {
+            $query->whereDate('entry_date', '>=', $from);
+        }
+
+        if ($to !== '') {
+            $query->whereDate('entry_date', '<=', $to);
+        }
+
         return view('diary.index', [
             'entries' => $query->paginate(20)->withQueryString(),
             'keyword' => $keyword,
             'activeTag' => $tag,
+            'mood' => $mood,
+            'weather' => $weather,
+            'from' => $from,
+            'to' => $to,
+            'moods' => config('diary.moods'),
+            'weathers' => config('diary.weather'),
+            'highlight' => $this->highlight,
             'lastYearEntry' => $this->review->today(),
             'tags' => Tag::where('user_id', Auth::id())
                 ->withCount('entries')
@@ -59,6 +96,8 @@ class DiaryController extends Controller
         return view('diary.edit', [
             'date' => $date,
             'entry' => $entry,
+            'moods' => config('diary.moods'),
+            'weathers' => config('diary.weather'),
         ]);
     }
 
@@ -86,6 +125,8 @@ class DiaryController extends Controller
             'title' => ['nullable', 'string', 'max:200'],
             'body' => ['nullable', 'string', 'max:100000'],
             'tags' => ['nullable', 'string', 'max:500'],
+            'mood' => ['nullable', 'string', 'max:20', Rule::in(array_keys(config('diary.moods')))],
+            'weather' => ['nullable', 'string', 'max:20', Rule::in(array_keys(config('diary.weather')))],
         ]);
 
         $entry = Entry::firstOrNew([
@@ -95,6 +136,8 @@ class DiaryController extends Controller
 
         $entry->title = $data['title'] ?? null;
         $entry->body = $data['body'] ?? null;
+        $entry->mood = $data['mood'] ?? null;
+        $entry->weather = $data['weather'] ?? null;
 
         if (! $request->boolean('autosave')) {
             $entry->status = 'published';

@@ -105,6 +105,8 @@ class DiaryImporter
                     $entry->title = $item['title'];
                     $entry->body = $item['body'];
                     $entry->status = $item['status'];
+                    $entry->mood = $item['mood'];
+                    $entry->weather = $item['weather'];
                     $entry->save();
 
                     $this->syncTags($entry, $item['tags']);
@@ -270,8 +272,8 @@ class DiaryImporter
             throw new RuntimeException('导入文件不是有效的 JSON');
         }
 
-        if (! is_array($payload) || ($payload['format'] ?? null) !== 'private-diary/1') {
-            throw new RuntimeException('不支持的导入格式，需要 private-diary/1');
+        if (! is_array($payload) || ! in_array($payload['format'] ?? null, ['private-diary/1', 'private-diary/2'], true)) {
+            throw new RuntimeException('不支持的导入格式，需要 private-diary/1 或 private-diary/2');
         }
 
         if (! isset($payload['entries']) || ! is_array($payload['entries'])) {
@@ -299,6 +301,11 @@ class DiaryImporter
             $title = $item['title'] ?? null;
             $body = $item['body'] ?? null;
             $status = $item['status'] ?? 'draft';
+            $mood = $item['mood'] ?? null;
+            $weather = $item['weather'] ?? null;
+
+            $mood = is_string($mood) && $mood !== '' && mb_strlen($mood) <= 20 ? $mood : null;
+            $weather = is_string($weather) && $weather !== '' && mb_strlen($weather) <= 20 ? $weather : null;
 
             if ($title !== null && (! is_string($title) || mb_strlen($title) > 200)) {
                 throw new RuntimeException($date.' 的标题不合法');
@@ -349,6 +356,8 @@ class DiaryImporter
                 'title' => $title,
                 'body' => $body,
                 'status' => $status,
+                'mood' => $mood,
+                'weather' => $weather,
                 'tags' => $tags,
                 'attachments' => $attachments,
             ];

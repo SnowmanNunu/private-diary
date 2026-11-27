@@ -13,7 +13,7 @@ A self-hosted, single-user diary: Markdown writing, tags and full-text search, c
 ### 功能特性
 
 - **写作**：按日期一篇，Markdown 编辑与实时预览，1.2 秒防抖自动保存，`Ctrl/⌘ + S` 手动保存
-- **整理**：逗号分隔标签、标签筛选、中文全文搜索（FTS5 trigram，短词用子串兜底）
+- **整理**：逗号分隔标签、心情/天气记录与筛选、关键词高亮、日期范围筛选、中文全文搜索（FTS5 trigram，短词用子串兜底）
 - **回顾**：月历视图、去年今日 / 去年同日
 - **附件**：私有图片上传，鉴权路由访问，删除日记时同步清理文件
 - **导出与导入**：Markdown ZIP（按年分目录、图片相对链接、`manifest.json`）与结构化 JSON；导入支持按日期幂等、冲突策略与图片恢复
@@ -91,7 +91,7 @@ php artisan test
 ### Features
 
 - **Write**: one entry per day, Markdown editor with live preview, debounced autosave (1.2s), `Ctrl/⌘ + S` to save
-- **Organize**: comma-separated tags, tag filters, Chinese full-text search (SQLite FTS5 trigram with substring fallback)
+- **Organize**: comma-separated tags, mood and weather with filters, highlighted search matches, date-range filtering, Chinese full-text search (SQLite FTS5 trigram with substring fallback)
 - **Reflect**: monthly calendar, "on this day last year" on the list and reading pages
 - **Attachments**: private image uploads served through authenticated routes; files removed with their entry
 - **Export & import**: Markdown ZIP (yearly folders, relative image links, `manifest.json`) and structured JSON; date-based idempotent import with conflict strategies and image restoration

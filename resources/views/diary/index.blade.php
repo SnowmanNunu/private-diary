@@ -4,6 +4,7 @@
 
 @section('content')
 @php($weekdays = ['日', '一', '二', '三', '四', '五', '六'])
+@php($base = array_filter(['q' => $keyword, 'mood' => $mood, 'weather' => $weather, 'from' => $from, 'to' => $to]))
 <div class="page-head">
     <div>
         <h1>日记</h1>
@@ -23,19 +24,34 @@
 @endif
 
 <form method="GET" action="{{ route('diary.index') }}" class="search-form">
-    <input type="search" name="q" value="{{ $keyword }}" placeholder="搜索标题或正文（至少 3 字，短词也支持）">
-    <button type="submit">搜索</button>
-    @if ($keyword !== '')
-        <a href="{{ route('diary.index', ['tag' => $activeTag]) }}">清除</a>
+    <input type="search" name="q" value="{{ $keyword }}" placeholder="搜索标题或正文（至少 3 字，短词也支持）" aria-label="搜索关键词">
+    <select name="mood" aria-label="按心情筛选">
+        <option value="">全部心情</option>
+        @foreach ($moods as $key => $label)
+            <option value="{{ $key }}" @selected($mood === $key)>{{ $label }}</option>
+        @endforeach
+    </select>
+    <select name="weather" aria-label="按天气筛选">
+        <option value="">全部天气</option>
+        @foreach ($weathers as $key => $label)
+            <option value="{{ $key }}" @selected($weather === $key)>{{ $label }}</option>
+        @endforeach
+    </select>
+    <input type="date" name="from" value="{{ $from }}" aria-label="开始日期">
+    <span class="date-sep">至</span>
+    <input type="date" name="to" value="{{ $to }}" aria-label="结束日期">
+    <button type="submit">筛选</button>
+    @if ($base !== [] || $activeTag !== '')
+        <a href="{{ route('diary.index') }}">清除</a>
     @endif
 </form>
 
 <div class="filter-bar">
     <span class="muted">标签</span>
-    <a class="tag-filter {{ $activeTag === '' ? 'active' : '' }}" href="{{ route('diary.index', ['q' => $keyword]) }}">全部</a>
+    <a class="tag-filter {{ $activeTag === '' ? 'active' : '' }}" href="{{ route('diary.index', $base) }}">全部</a>
     @forelse ($tags as $tag)
         <a class="tag-filter {{ $activeTag === $tag->name ? 'active' : '' }}"
-           href="{{ route('diary.index', ['q' => $keyword, 'tag' => $tag->name]) }}">
+           href="{{ route('diary.index', $base + ['tag' => $tag->name]) }}">
             {{ $tag->name }} <span class="muted">{{ $tag->entries_count }}</span>
         </a>
     @empty
@@ -65,11 +81,19 @@
                         <span class="weekday">周{{ $weekdays[$entry->entry_date->dayOfWeek] }}</span>
                     </div>
                     <div class="entry-main">
-                        <h2>{{ $entry->title ?: '无标题' }}</h2>
-                        <p>{{ \Illuminate\Support\Str::limit(trim(preg_replace('/\s+/', ' ', strip_tags($entry->body ?? ''))), 120) }}</p>
+                        <h2>{!! $highlight->text($entry->title ?: '无标题', $keyword) !!}</h2>
+                        <p>{!! $highlight->text(\Illuminate\Support\Str::limit(trim(preg_replace('/\s+/', ' ', strip_tags($entry->body ?? ''))), 120), $keyword) !!}</p>
+                        <div class="entry-flags">
+                            @if ($entry->mood)
+                                <a class="mood-chip mood-{{ $entry->mood }}" href="{{ route('diary.index', ['mood' => $entry->mood]) }}">{{ $moods[$entry->mood] ?? $entry->mood }}</a>
+                            @endif
+                            @if ($entry->weather)
+                                <a class="weather-chip" href="{{ route('diary.index', ['weather' => $entry->weather]) }}">{{ $weathers[$entry->weather] ?? $entry->weather }}</a>
+                            @endif
+                        </div>
                         <div class="tag-list">
                             @foreach ($entry->tags as $tag)
-                                <a class="tag" href="{{ route('diary.index', ['tag' => $tag->name]) }}">{{ $tag->name }}</a>
+                                <a class="tag" href="{{ route('diary.index', $base + ['tag' => $tag->name]) }}">{{ $tag->name }}</a>
                             @endforeach
                             @if ($entry->attachments->isNotEmpty())
                                 <span class="tag">{{ $entry->attachments->count() }} 张图片</span>
