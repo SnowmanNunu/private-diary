@@ -8,10 +8,19 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="私密日记">
     <title>@yield('title', config('app.name'))</title>
+    <script>
+        (function () {
+            try {
+                var m = localStorage.getItem('private-diary:theme') || 'auto';
+                var dark = m === 'dark' || (m === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
+                document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+            } catch (e) { /* 隐私模式 */ }
+        })();
+    </script>
     <link rel="manifest" href="{{ asset('manifest.webmanifest') }}">
     <link rel="icon" href="{{ asset('icons/icon.svg') }}" type="image/svg+xml">
     <link rel="apple-touch-icon" href="{{ asset('icons/icon-192.png') }}">
-    <link rel="stylesheet" href="{{ asset('css/app.css') }}?v=4">
+    <link rel="stylesheet" href="{{ asset('css/app.css') }}?v=5">
 </head>
 <body>
 <div class="shell">
@@ -31,6 +40,7 @@
                 <a class="{{ request()->routeIs('diary.create', 'diary.store') ? 'active' : '' }}" href="{{ route('diary.create') }}">写今天</a>
                 <a class="{{ request()->routeIs('pwa.offline') ? 'active' : '' }}" href="{{ route('pwa.offline') }}">离线写作</a>
                 <span class="pwa-status" id="pwa-status" hidden></span>
+                <button type="button" class="link-button theme-toggle" id="theme-toggle" aria-label="切换主题">自动主题</button>
                 <form method="POST" action="{{ route('logout') }}">
                     @csrf
                     <button type="submit" class="link-button">退出</button>
@@ -52,6 +62,7 @@
     @endif
 </div>
 <script src="{{ asset('js/offline-drafts.js') }}"></script>
+<script src="{{ asset('js/theme.js') }}"></script>
 @if (auth()->check())
 <script>
 (function () {

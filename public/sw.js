@@ -4,11 +4,12 @@
  */
 'use strict';
 
-const CACHE = 'private-diary-shell-v1';
+const CACHE = 'private-diary-shell-v2';
 const SHELL = [
     '/offline',
     '/css/app.css',
     '/js/offline-drafts.js',
+    '/js/theme.js',
     '/manifest.webmanifest',
     '/icons/icon.svg',
     '/icons/icon-192.png',

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\BackupAudit;
+use App\Services\BackupHealth;
+use App\Services\Notifier;
 use App\Services\Settings;
 use DateTimeZone;
 use Illuminate\Http\JsonResponse;
@@ -29,8 +31,10 @@ class SettingsController extends Controller
             'configured' => [
                 'secret' => filled($values['s3_secret'] ?? null),
                 'passphrase' => filled($values['backup_passphrase'] ?? null),
+                'webhook' => filled($values['notify_webhook'] ?? null),
             ],
-            'audits' => BackupAudit::query()->latest()->limit(5)->get(),
+            'health' => app(BackupHealth::class)->status(),
+            'audits' => BackupAudit::query()->latest()->limit(8)->get(),
         ]);
     }
 
@@ -60,6 +64,13 @@ class SettingsController extends Controller
                     $fail('时区无效，例如 Asia/Shanghai。');
                 }
             }],
+            'notify_enabled' => ['nullable', 'boolean'],
+            'notify_email' => ['nullable', 'email', 'max:255'],
+            'notify_webhook' => ['nullable', 'string', 'max:500'],
+            'backup_alert_hours' => ['required', 'integer', 'min:1', 'max:720'],
+            'reminder_enabled' => ['nullable', 'boolean'],
+            'reminder_time' => ['required', 'date_format:H:i'],
+            'reminder_streak_alert' => ['nullable', 'boolean'],
         ]);
 
         if (! Hash::check($data['current_password'], Auth::user()->password)) {
@@ -84,6 +95,12 @@ class SettingsController extends Controller
             'verify_day' => (int) $data['verify_day'],
             'verify_time' => $data['verify_time'],
             'timezone' => $data['timezone'],
+            'notify_enabled' => $request->boolean('notify_enabled'),
+            'notify_email' => trim((string) ($data['notify_email'] ?? '')),
+            'backup_alert_hours' => (int) $data['backup_alert_hours'],
+            'reminder_enabled' => $request->boolean('reminder_enabled'),
+            'reminder_time' => $data['reminder_time'],
+            'reminder_streak_alert' => $request->boolean('reminder_streak_alert'),
         ];
 
         // 留空表示保留原有凭证，避免页面回显秘密信息。
@@ -93,6 +110,10 @@ class SettingsController extends Controller
 
         if (filled($data['backup_passphrase'] ?? null)) {
             $values['backup_passphrase'] = $data['backup_passphrase'];
+        }
+
+        if (filled($data['notify_webhook'] ?? null)) {
+            $values['notify_webhook'] = trim($data['notify_webhook']);
         }
 
         $settings->save($values);
@@ -123,6 +144,22 @@ class SettingsController extends Controller
         } finally {
             config()->set('filesystems.disks.s3.throw', false);
         }
+    }
+
+    public function testNotify(): JsonResponse
+    {
+        $result = app(Notifier::class)->send(
+            '测试通知 · '.config('app.name'),
+            '这是一条测试通知。如果你收到它，说明邮件或 Webhook 配置正确。',
+            'test',
+        );
+
+        return response()->json([
+            'ok' => $result['sent'] > 0,
+            'message' => $result['sent'] > 0
+                ? '测试通知已发送（'.$result['sent'].' 个渠道）。'
+                : '发送失败：'.implode('；', $result['errors']),
+        ], $result['sent'] > 0 ? 200 : 422);
     }
 
     public function backupNow(): RedirectResponse

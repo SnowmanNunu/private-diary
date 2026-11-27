@@ -190,6 +190,13 @@ class DiaryV04Test extends TestCase
             'verify_day' => '1',
             'verify_time' => '04:00',
             'timezone' => 'Asia/Shanghai',
+            'notify_enabled' => '1',
+            'notify_email' => '',
+            'notify_webhook' => '',
+            'backup_alert_hours' => '36',
+            'reminder_enabled' => '0',
+            'reminder_time' => '21:00',
+            'reminder_streak_alert' => '1',
         ], $overrides);
     }
 }

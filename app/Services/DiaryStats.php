@@ -8,6 +8,23 @@ use Illuminate\Support\Facades\Auth;
 
 class DiaryStats
 {
+    public function streak(?int $userId = null): int
+    {
+        return $this->streakFor($userId ?? (int) Auth::id());
+    }
+
+    public function streakFor(int $userId): int
+    {
+        $dates = Entry::where('user_id', $userId)
+            ->orderByDesc('entry_date')
+            ->limit(400)
+            ->pluck('entry_date')
+            ->map(fn ($date): string => Carbon::parse($date)->toDateString())
+            ->all();
+
+        return $this->currentStreak($dates);
+    }
+
     public function years(): array
     {
         return Entry::where('user_id', Auth::id())

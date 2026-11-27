@@ -13,6 +13,14 @@
     <a class="primary" href="{{ route('diary.create') }}">写今天</a>
 </div>
 
+<div class="status-strip">
+    <span class="streak-badge">连续写作 <strong>{{ $streak }}</strong> 天</span>
+    <a class="health-badge health-{{ $health['level'] }}" href="{{ route('settings.index') }}">
+        备份状态：{{ $health['level'] === 'ok' ? '正常' : ($health['level'] === 'unknown' ? '未备份' : '需要关注') }}
+        <span class="muted">· {{ $health['message'] }}</span>
+    </a>
+</div>
+
 @if ($lastYearEntry)
     <section class="review-card">
         <p class="muted">去年今日 · {{ $lastYearEntry->entry_date->format('Y 年 m 月 d 日') }}</p>

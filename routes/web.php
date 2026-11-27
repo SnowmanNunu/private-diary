@@ -66,6 +66,7 @@ Route::middleware(['auth', EnsureTwoFactorIsVerified::class])->group(function ()
     Route::put('/settings', [SettingsController::class, 'update'])->name('settings.update');
     Route::post('/settings/test-storage', [SettingsController::class, 'testStorage'])->name('settings.test-storage');
     Route::post('/settings/backup-now', [SettingsController::class, 'backupNow'])->name('settings.backup-now');
+    Route::post('/settings/test-notify', [SettingsController::class, 'testNotify'])->name('settings.test-notify');
 
     Route::get('/diary', [DiaryController::class, 'index'])->name('diary.index');
     Route::get('/diary/create', [DiaryController::class, 'create'])->name('diary.create');
@@ -95,6 +96,14 @@ Route::middleware(['auth', EnsureTwoFactorIsVerified::class])->group(function ()
     Route::post('/diary/{date}/attachments', [AttachmentController::class, 'store'])
         ->where('date', '[0-9]{4}-[0-9]{2}-[0-9]{2}')
         ->name('attachments.store');
+
+    Route::post('/diary/{date}/conflicts/{conflict}/restore', [DiaryController::class, 'restoreConflict'])
+        ->where('date', '[0-9]{4}-[0-9]{2}-[0-9]{2}')
+        ->name('diary.conflict.restore');
+
+    Route::delete('/diary/{date}/conflicts/{conflict}', [DiaryController::class, 'destroyConflict'])
+        ->where('date', '[0-9]{4}-[0-9]{2}-[0-9]{2}')
+        ->name('diary.conflict.destroy');
 
     Route::get('/attachments/{attachment}', [AttachmentController::class, 'show'])
         ->name('attachments.show');

@@ -10,6 +10,18 @@
     </div>
 </div>
 
+<section class="health-card health-{{ $health['level'] }}">
+    <div>
+        <h2>备份健康</h2>
+        <p class="muted">{{ $health['message'] }}</p>
+    </div>
+    <div class="health-facts">
+        <span>最近备份：<strong>{{ $health['last_backup_at']?->format('Y-m-d H:i') ?? '—' }}</strong>（{{ $health['last_backup_status'] }}）</span>
+        <span>最近演练：<strong>{{ $health['last_verify_at']?->format('Y-m-d H:i') ?? '—' }}</strong>（{{ $health['last_verify_status'] }}）</span>
+        <span>告警阈值：{{ $health['alert_hours'] }} 小时</span>
+    </div>
+</section>
+
 @if ($errors->any())
     <div class="errors">
         @foreach ($errors->all() as $error)
@@ -130,6 +142,54 @@
         <pre class="cron-line">* * * * * cd /path/to/private-diary &amp;&amp; php artisan schedule:run &gt;&gt; /dev/null 2&gt;&amp;1</pre>
     </section>
 
+    <section class="setting-card">
+        <h2>通知与提醒</h2>
+        <p class="muted">备份失败、备份过期与每日写作提醒都会通过这里配置的渠道发送。Webhook 会收到一个 JSON（subject / body / level / app / sent_at）。</p>
+        <label class="checkbox-row">
+            <input type="checkbox" name="notify_enabled" value="1" @checked(old('notify_enabled', $values['notify_enabled']))>
+            启用通知
+        </label>
+        <div class="form-grid">
+            <div class="form-field">
+                <label for="notify_email">通知邮箱</label>
+                <input id="notify_email" name="notify_email" type="email" value="{{ old('notify_email', $values['notify_email']) }}" placeholder="you@example.com">
+            </div>
+            <div class="form-field">
+                <label for="notify_webhook">Webhook 地址</label>
+                <input id="notify_webhook" name="notify_webhook" type="password" autocomplete="new-password"
+                       placeholder="{{ $configured['webhook'] ? '已保存，留空表示不修改' : 'https://…' }}">
+            </div>
+            <div class="form-field">
+                <label for="backup_alert_hours">备份过期告警（小时）</label>
+                <input id="backup_alert_hours" name="backup_alert_hours" type="number" min="1" max="720" value="{{ old('backup_alert_hours', $values['backup_alert_hours']) }}">
+            </div>
+        </div>
+        <div class="setting-inline">
+            <button type="button" id="test-notify" class="link-button">发送测试通知</button>
+            <span id="notify-test-state" class="muted">保存配置后再测试。</span>
+        </div>
+    </section>
+
+    <section class="setting-card">
+        <h2>写作提醒</h2>
+        <p class="muted">到点发现当天还没写日记时，发一条温和提醒；已写过就不会打扰。</p>
+        <label class="checkbox-row">
+            <input type="checkbox" name="reminder_enabled" value="1" @checked(old('reminder_enabled', $values['reminder_enabled']))>
+            启用每日写作提醒
+        </label>
+        <label class="checkbox-row">
+            <input type="checkbox" name="reminder_streak_alert" value="1" @checked(old('reminder_streak_alert', $values['reminder_streak_alert']))>
+            提醒里带上连续写作天数
+        </label>
+        <div class="form-grid">
+            <div class="form-field">
+                <label for="reminder_time">提醒时间</label>
+                <input id="reminder_time" name="reminder_time" type="time" value="{{ old('reminder_time', $values['reminder_time']) }}">
+            </div>
+        </div>
+        <p class="muted">健康自检每天 09:00 运行；调度由系统 cron 或 Docker 的 scheduler 容器触发。</p>
+    </section>
+
     <div class="setting-actions">
         <label for="current_password">当前登录密码（保存敏感设置需要验证）</label>
         <input id="current_password" name="current_password" type="password" required autocomplete="current-password">
@@ -145,12 +205,13 @@
     @else
         <table class="audit-table">
             <thead>
-                <tr><th>时间</th><th>结果</th><th>备份文件</th><th>耗时</th></tr>
+                <tr><th>时间</th><th>类型</th><th>结果</th><th>备份文件</th><th>耗时</th></tr>
             </thead>
             <tbody>
                 @foreach ($audits as $audit)
                     <tr>
                         <td>{{ $audit->checked_at->format('Y-m-d H:i') }}</td>
+                        <td>{{ $audit->kind === 'backup' ? '备份' : '演练' }}</td>
                         <td>{{ $audit->status }}</td>
                         <td>{{ $audit->backup_path ?: '—' }}</td>
                         <td>{{ $audit->duration_ms }} ms</td>
@@ -188,6 +249,26 @@
         } catch (error) {
             state.textContent = '测试失败，请检查网络或服务配置。';
             state.className = 'test-fail';
+        }
+    });
+
+    const notifyButton = document.getElementById('test-notify');
+    const notifyState = document.getElementById('notify-test-state');
+
+    notifyButton.addEventListener('click', async () => {
+        notifyState.textContent = '正在发送…';
+        notifyState.className = 'muted';
+        try {
+            const response = await fetch('{{ route('settings.test-notify') }}', {
+                method: 'POST',
+                headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': token },
+            });
+            const data = await response.json();
+            notifyState.textContent = data.message || '发送失败。';
+            notifyState.className = data.ok ? 'test-ok' : 'test-fail';
+        } catch (error) {
+            notifyState.textContent = '发送失败，请检查网络或配置。';
+            notifyState.className = 'test-fail';
         }
     });
 })();

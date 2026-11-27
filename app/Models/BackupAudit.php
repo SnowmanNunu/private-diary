@@ -11,6 +11,7 @@ class BackupAudit extends Model
 
     protected $fillable = [
         'backup_path',
+        'kind',
         'status',
         'details',
         'duration_ms',

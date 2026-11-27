@@ -46,10 +46,14 @@
     function put(date, fields) {
         if (!isDate(date)) return null;
         var drafts = all();
+        var previous = drafts[date];
         var draft = { date: date, updatedAt: new Date().toISOString(), pending: true };
         FIELDS.forEach(function (field) {
             draft[field] = fields && typeof fields[field] === 'string' ? fields[field] : '';
         });
+        draft.revision = fields && typeof fields.revision === 'number'
+            ? fields.revision
+            : (previous && typeof previous.revision === 'number' ? previous.revision : 0);
         drafts[date] = draft;
         write(DRAFTS_KEY, drafts);
         return draft;
@@ -60,6 +64,25 @@
         if (drafts[date]) {
             drafts[date].pending = false;
             drafts[date].syncedAt = new Date().toISOString();
+            write(DRAFTS_KEY, drafts);
+        }
+    }
+
+    function markConflict(date, info) {
+        var drafts = all();
+        if (drafts[date]) {
+            drafts[date].conflict = true;
+            drafts[date].conflictInfo = info || null;
+            write(DRAFTS_KEY, drafts);
+        }
+    }
+
+    function clearConflict(date, serverRevision) {
+        var drafts = all();
+        if (drafts[date]) {
+            drafts[date].conflict = false;
+            drafts[date].conflictInfo = null;
+            if (typeof serverRevision === 'number') drafts[date].revision = serverRevision;
             write(DRAFTS_KEY, drafts);
         }
     }
@@ -77,7 +100,14 @@
     function pending() {
         return Object.keys(all())
             .map(get)
-            .filter(function (draft) { return draft && draft.pending; })
+            .filter(function (draft) { return draft && draft.pending && !draft.conflict; })
+            .sort(function (a, b) { return a.date.localeCompare(b.date); });
+    }
+
+    function conflicts() {
+        return Object.keys(all())
+            .map(get)
+            .filter(function (draft) { return draft && draft.conflict; })
             .sort(function (a, b) { return a.date.localeCompare(b.date); });
     }
 
@@ -96,6 +126,7 @@
         var payload = {};
         FIELDS.forEach(function (field) { payload[field] = draft[field]; });
         payload.autosave = true;
+        payload.revision = typeof draft.revision === 'number' ? draft.revision : 0;
 
         var response = await window.fetch('/diary/' + encodeURIComponent(draft.date), {
             method: 'POST',
@@ -108,22 +139,39 @@
             body: JSON.stringify(payload),
         });
 
+        if (response.status === 409) {
+            var info = await response.json().catch(function () { return {}; });
+            markConflict(draft.date, info);
+            throw new Error('CONFLICT');
+        }
         if (response.status === 419) throw new Error('SESSION_EXPIRED');
         if (!response.ok) throw new Error('HTTP_' + response.status);
+        var saved = await response.json();
         markSynced(draft.date);
-        return response.json();
+        if (saved && typeof saved.revision === 'number') {
+            var drafts = all();
+            if (drafts[draft.date]) {
+                drafts[draft.date].revision = saved.revision;
+                write(DRAFTS_KEY, drafts);
+            }
+        }
+        return saved;
     }
 
     async function syncAll(onProgress) {
         var list = pending();
-        var result = { ok: 0, failed: 0, expired: false, total: list.length };
+        var result = { ok: 0, failed: 0, expired: false, conflicts: 0, total: list.length };
 
         for (var i = 0; i < list.length; i++) {
             try {
                 await syncOne(list[i]);
                 result.ok++;
             } catch (e) {
-                result.failed++;
+                if (e && e.message === 'CONFLICT') {
+                    result.conflicts++;
+                } else {
+                    result.failed++;
+                }
                 if (e && e.message === 'SESSION_EXPIRED') {
                     result.expired = true;
                     break;
@@ -132,6 +180,35 @@
             if (onProgress) onProgress(result);
         }
         return result;
+    }
+
+    async function overwrite(date) {
+        var draft = get(date);
+        if (!draft) return null;
+        var payload = {};
+        FIELDS.forEach(function (field) { payload[field] = draft[field]; });
+        payload.autosave = true;
+        payload.force = true;
+        payload.revision = draft.conflictInfo && typeof draft.conflictInfo.server_revision === 'number'
+            ? draft.conflictInfo.server_revision
+            : (typeof draft.revision === 'number' ? draft.revision : 0);
+
+        var response = await window.fetch('/diary/' + encodeURIComponent(date), {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': getMeta().csrf,
+            },
+            body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) throw new Error('HTTP_' + response.status);
+        var saved = await response.json();
+        clearConflict(date, saved.revision);
+        markSynced(date);
+        return saved;
     }
 
     function register() {
@@ -181,13 +258,17 @@
         get: get,
         put: put,
         markSynced: markSynced,
+        markConflict: markConflict,
+        clearConflict: clearConflict,
         remove: remove,
         clear: clear,
         pending: pending,
+        conflicts: conflicts,
         setMeta: setMeta,
         getMeta: getMeta,
         syncOne: syncOne,
         syncAll: syncAll,
+        overwrite: overwrite,
         register: register,
         requestBackgroundSync: requestBackgroundSync,
         onSync: onSync,

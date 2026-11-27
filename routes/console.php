@@ -9,7 +9,24 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-$schedule = app(Settings::class)->schedule();
+/** @var Settings $settingsService */
+$settingsService = app(Settings::class);
+$schedule = $settingsService->schedule();
+$timezone = $schedule['timezone'];
+
+Schedule::command('diary:health')
+    ->dailyAt('09:00')
+    ->timezone($timezone)
+    ->withoutOverlapping(60);
+
+$reminder = $settingsService->reminder();
+
+if ($reminder['enabled']) {
+    Schedule::command('diary:remind')
+        ->dailyAt($reminder['time'])
+        ->timezone($timezone)
+        ->withoutOverlapping(60);
+}
 
 if ($schedule['enabled']) {
     Schedule::command('diary:backup')

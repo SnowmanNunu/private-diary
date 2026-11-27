@@ -37,6 +37,8 @@ class Settings
         'backup_disk', 'backup_path', 'backup_keep', 'backup_passphrase',
         's3_key', 's3_secret', 's3_region', 's3_bucket', 's3_url', 's3_endpoint', 's3_path_style',
         'schedule_enabled', 'backup_time', 'verify_enabled', 'verify_day', 'verify_time', 'timezone',
+        'notify_enabled', 'notify_email', 'notify_webhook', 'backup_alert_hours',
+        'reminder_enabled', 'reminder_time', 'reminder_streak_alert',
     ];
 
     /** @return array<string, mixed> */
@@ -60,6 +62,13 @@ class Settings
             'verify_day' => 1,
             'verify_time' => '04:00',
             'timezone' => 'Asia/Shanghai',
+            'notify_enabled' => true,
+            'notify_email' => '',
+            'notify_webhook' => '',
+            'backup_alert_hours' => 36,
+            'reminder_enabled' => false,
+            'reminder_time' => '21:00',
+            'reminder_streak_alert' => true,
         ];
     }
 
@@ -149,6 +158,32 @@ class Settings
             'verify_enabled' => (bool) ($values['verify_enabled'] ?? true),
             'verify_day' => max(1, min(28, (int) ($values['verify_day'] ?? 1))),
             'verify_time' => (string) ($values['verify_time'] ?? '04:00'),
+            'timezone' => (string) ($values['timezone'] ?? 'Asia/Shanghai'),
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    public function notifications(): array
+    {
+        $values = $this->all();
+
+        return [
+            'enabled' => (bool) ($values['notify_enabled'] ?? true),
+            'email' => trim((string) ($values['notify_email'] ?? '')),
+            'webhook' => trim((string) ($values['notify_webhook'] ?? '')),
+            'alert_hours' => max(1, min(720, (int) ($values['backup_alert_hours'] ?? 36))),
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    public function reminder(): array
+    {
+        $values = $this->all();
+
+        return [
+            'enabled' => (bool) ($values['reminder_enabled'] ?? false),
+            'time' => (string) ($values['reminder_time'] ?? '21:00'),
+            'streak_alert' => (bool) ($values['reminder_streak_alert'] ?? true),
             'timezone' => (string) ($values['timezone'] ?? 'Asia/Shanghai'),
         ];
     }

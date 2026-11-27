@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\BackupAudit;
 use App\Services\BackupManager;
+use App\Services\Notifier;
 use Illuminate\Console\Command;
 use Throwable;
 
@@ -25,6 +26,7 @@ class VerifyBackupCommand extends Command
             $result = $manager->verify($path);
 
             BackupAudit::create([
+                'kind' => 'verify',
                 'backup_path' => $result['path'],
                 'status' => 'ok',
                 'details' => $result,
@@ -39,6 +41,7 @@ class VerifyBackupCommand extends Command
             return self::SUCCESS;
         } catch (Throwable $exception) {
             BackupAudit::create([
+                'kind' => 'verify',
                 'backup_path' => $path,
                 'status' => 'failed',
                 'details' => ['error' => $exception->getMessage()],
@@ -47,6 +50,12 @@ class VerifyBackupCommand extends Command
             ]);
 
             $this->error('恢复演练失败：'.$exception->getMessage());
+
+            app(Notifier::class)->send(
+                '恢复演练失败 · '.config('app.name'),
+                '备份恢复演练失败：'.$exception->getMessage()."\n时间：".now()->toDateTimeString(),
+                'error',
+            );
 
             return self::FAILURE;
         }

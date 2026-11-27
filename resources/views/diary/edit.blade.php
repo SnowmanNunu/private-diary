@@ -23,10 +23,55 @@
     <button type="button" data-md="code">代码</button>
     <button type="button" data-md="link">链接</button>
     <button type="button" id="preview-toggle">预览</button>
+    <button type="button" id="focus-toggle">专注</button>
 </div>
+
+@if ($conflict)
+    <section class="conflict-card">
+        <h2>检测到版本冲突</h2>
+        <p class="muted">另一台设备（或离线草稿）已经更新了这一天的日记。你刚写的内容已保存为冲突副本，不会被丢弃。</p>
+        <div class="conflict-compare">
+            <h3>服务器上的版本（版本 {{ $conflict['server']['revision'] }}）</h3>
+            <p><strong>{{ $conflict['server']['title'] ?: '无标题' }}</strong></p>
+            <p class="muted">{{ \Illuminate\Support\Str::limit(trim(preg_replace('/\s+/', ' ', strip_tags($conflict['server']['body'] ?? ''))), 300) ?: '（无正文）' }}</p>
+        </div>
+        <div class="conflict-actions">
+            <button type="button" id="conflict-overwrite" class="primary">用我刚写的内容覆盖</button>
+            <a href="{{ route('diary.create', ['date' => $date]) }}" onclick="return confirm('放弃本机未保存的修改，重新载入服务器版本？');">重新载入服务器版本</a>
+        </div>
+    </section>
+@endif
+
+@if ($conflicts->isNotEmpty())
+    <section class="conflict-card">
+        <h2>冲突副本（{{ $conflicts->count() }}）</h2>
+        <p class="muted">这些内容曾因版本冲突没有写入日记，可恢复为当前内容或删除。</p>
+        @foreach ($conflicts as $copy)
+            <div class="conflict-copy">
+                <p class="muted">{{ $copy->created_at->format('Y-m-d H:i') }} · 来源 {{ $copy->source }} · 版本 {{ $copy->client_revision }} → {{ $copy->server_revision }}</p>
+                <h3>{{ $copy->title ?: '无标题' }}</h3>
+                <p>{{ \Illuminate\Support\Str::limit(trim(preg_replace('/\s+/', ' ', strip_tags($copy->body ?? ''))), 200) ?: '（无正文）' }}</p>
+                <div class="conflict-actions">
+                    <form method="POST" action="{{ route('diary.conflict.restore', [$date, $copy]) }}">
+                        @csrf
+                        <button type="submit">恢复为当前内容</button>
+                    </form>
+                    <form method="POST" action="{{ route('diary.conflict.destroy', [$date, $copy]) }}"
+                          onsubmit="return confirm('确定删除这份冲突副本？');">
+                        @csrf
+                        @method('DELETE')
+                        <button type="submit" class="danger">删除副本</button>
+                    </form>
+                </div>
+            </div>
+        @endforeach
+    </section>
+@endif
 
 <form id="editor-form" method="POST" action="{{ route('diary.store', $date) }}">
     @csrf
+    <input type="hidden" name="revision" id="editor-revision" value="{{ old('revision', $entry?->revision ?? 0) }}">
+    <input type="hidden" name="force" id="editor-force" value="0">
     <div class="editor-paper">
         <input type="text" name="title" id="entry-title" class="title-input"
                placeholder="标题（可留空）" maxlength="200"
@@ -144,11 +189,15 @@
     const picker = document.getElementById('editor-date-picker');
     const previewUrl = '{{ route('diary.preview') }}';
     const uploadUrl = '{{ route('attachments.store', $date) }}';
+    const revisionInput = document.getElementById('editor-revision');
+    const forceInput = document.getElementById('editor-force');
     const imageInput = document.getElementById('image-input');
     const uploadState = document.getElementById('upload-state');
     const attachmentList = document.getElementById('attachment-list');
     let timer = null;
     let previewTimer = null;
+    let currentRevision = parseInt(revisionInput.value, 10) || 0;
+    let conflictLock = false;
 
     function setRadio(name, value) {
         document.querySelectorAll('input[name="' + name + '"]').forEach((input) => {
@@ -176,7 +225,14 @@
             },
             body: JSON.stringify(payload),
         });
-        if (!response.ok) throw new Error('request failed');
+        if (!response.ok) {
+            let body = null;
+            try { body = await response.json(); } catch (e) { /* 非 JSON 错误 */ }
+            const error = new Error('request failed');
+            error.status = response.status;
+            error.body = body;
+            throw error;
+        }
         return response.json();
     }
 
@@ -192,19 +248,94 @@
             mood: selectedValue('mood'),
             weather: selectedValue('weather'),
             body: body.value,
+            revision: currentRevision,
+            force: forceInput.value === '1',
         };
     }
 
+    function showConflict(data) {
+        conflictLock = true;
+        state.textContent = '版本冲突：本机内容已保留，等待你选择。';
+        if (drafts) drafts.markConflict(entryDate, data);
+
+        const card = document.createElement('section');
+        card.className = 'conflict-card';
+        const heading = document.createElement('h2');
+        heading.textContent = '检测到版本冲突';
+        const intro = document.createElement('p');
+        intro.className = 'muted';
+        intro.textContent = '另一台设备或离线草稿已经更新了这一天的日记，你刚写的内容已保存为冲突副本，不会丢失。';
+
+        const compare = document.createElement('div');
+        compare.className = 'conflict-compare';
+        const compareTitle = document.createElement('h3');
+        compareTitle.textContent = '服务器上的版本（版本 ' + data.server_revision + '）';
+        const serverTitle = document.createElement('p');
+        const strong = document.createElement('strong');
+        strong.textContent = (data.server && data.server.title) || '无标题';
+        serverTitle.appendChild(strong);
+        const serverBody = document.createElement('p');
+        serverBody.className = 'muted';
+        serverBody.textContent = String((data.server && data.server.body) || '').replace(/\s+/g, ' ').slice(0, 300) || '（无正文）';
+        compare.append(compareTitle, serverTitle, serverBody);
+
+        const actions = document.createElement('div');
+        actions.className = 'conflict-actions';
+        const overwrite = document.createElement('button');
+        overwrite.type = 'button';
+        overwrite.className = 'primary';
+        overwrite.textContent = '用我的内容覆盖';
+        const reload = document.createElement('button');
+        reload.type = 'button';
+        reload.textContent = '重新载入服务器版本';
+        actions.append(overwrite, reload);
+
+        card.append(heading, intro, compare, actions);
+        form.parentNode.insertBefore(card, form);
+
+        overwrite.addEventListener('click', async () => {
+            currentRevision = data.server_revision;
+            revisionInput.value = String(currentRevision);
+            forceInput.value = '1';
+            conflictLock = false;
+            card.remove();
+            state.textContent = '正在覆盖…';
+            try {
+                const result = await postJson(form.action, Object.assign(collect(), { autosave: true }));
+                currentRevision = result.revision;
+                revisionInput.value = String(result.revision);
+                forceInput.value = '0';
+                state.textContent = '已用本机内容覆盖 ' + result.saved_at;
+                if (drafts) drafts.clearConflict(entryDate, currentRevision);
+            } catch (e) {
+                state.textContent = '覆盖失败，请手动保存。';
+            }
+        });
+
+        reload.addEventListener('click', () => {
+            if (confirm('放弃本机未保存的修改，重新载入服务器版本？')) window.location.reload();
+        });
+    }
+
     function scheduleSave() {
+        if (conflictLock) return;
         state.textContent = '正在保存…';
         if (drafts) drafts.put(entryDate, collect());
         clearTimeout(timer);
         timer = setTimeout(async () => {
             try {
                 const data = await postJson(form.action, Object.assign(collect(), { autosave: true }));
+                currentRevision = data.revision;
+                revisionInput.value = String(data.revision);
+                forceInput.value = '0';
                 state.textContent = '已自动保存 ' + data.saved_at;
+                if (drafts) drafts.markSynced(entryDate);
             } catch (e) {
-                state.textContent = '当前离线：已存到本机草稿，联网后自动同步。';
+                if (e.status === 409 && e.body && e.body.conflict) {
+                    showConflict(e.body);
+                    return;
+                }
+                state.textContent = '当前离线或保存失败：已存到本机草稿，联网后自动同步。';
                 if (drafts) drafts.requestBackgroundSync();
             }
         }, 1200);
@@ -358,6 +489,37 @@
     picker.addEventListener('change', () => {
         if (picker.value) window.location.href = '{{ route('diary.create') }}?date=' + picker.value;
     });
+
+    const serverConflictButton = document.getElementById('conflict-overwrite');
+    if (serverConflictButton) {
+        serverConflictButton.addEventListener('click', () => {
+            forceInput.value = '1';
+            form.requestSubmit();
+        });
+    }
+
+    const focusToggle = document.getElementById('focus-toggle');
+    if (focusToggle) {
+        let focused = false;
+        try { focused = localStorage.getItem('private-diary:focus') === '1'; } catch (e) { /* 隐私模式 */ }
+        const applyFocus = () => {
+            document.body.classList.toggle('focus-mode', focused);
+            focusToggle.textContent = focused ? '退出专注' : '专注';
+        };
+        applyFocus();
+        focusToggle.addEventListener('click', () => {
+            focused = !focused;
+            try { localStorage.setItem('private-diary:focus', focused ? '1' : '0'); } catch (e) { /* 隐私模式 */ }
+            applyFocus();
+        });
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && focused) {
+                focused = false;
+                try { localStorage.setItem('private-diary:focus', '0'); } catch (e) { /* 隐私模式 */ }
+                applyFocus();
+            }
+        });
+    }
 })();
 </script>
 @endpush

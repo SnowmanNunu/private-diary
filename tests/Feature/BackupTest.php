@@ -84,7 +84,7 @@ class BackupTest extends TestCase
 
         $this->artisan('diary:backup:verify')->assertSuccessful();
 
-        $audit = BackupAudit::firstOrFail();
+        $audit = BackupAudit::where('kind', 'verify')->firstOrFail();
         $this->assertSame('ok', $audit->status);
         $this->assertSame($path, $audit->backup_path);
         $this->assertSame(1, $audit->details['counts']['entries']);
@@ -103,7 +103,7 @@ class BackupTest extends TestCase
 
         $this->artisan('diary:backup:verify')->assertFailed();
 
-        $audit = BackupAudit::firstOrFail();
+        $audit = BackupAudit::where('kind', 'verify')->firstOrFail();
         $this->assertSame('failed', $audit->status);
         $this->assertSame($path, $audit->backup_path);
     }

@@ -25,6 +25,7 @@ A self-hosted, single-user diary: Markdown writing, tags and full-text search, c
 - **设置**：后台配置 S3/COS/R2 凭证、备份口令、每日备份与季度演练时间；敏感值加密存储，无需改 `.env`
 - **离线写作**：可安装的 PWA，断网时写入本机草稿，联网登录后自动同步；Service Worker 只缓存公开静态资源，不缓存日记正文、附件或任何 POST 请求
 - **部署**：Docker Compose 一条命令启动 Web、PHP 与定时任务容器；GitHub Actions 自动跑测试并验证镜像构建
+- **安心机制**：多端/离线同步的版本冲突检测（拒绝静默覆盖并保留副本）、备份健康看板与失败告警、每日写作提醒与连续天数、暗色主题与专注模式
 
 ### 技术栈
 
@@ -62,7 +63,7 @@ docker compose exec app php artisan diary:user   # 按提示创建唯一用户
 | --- | --- |
 | `web` | nginx，只暴露 `public/`，提供静态资源并把 PHP 请求转给 `app` |
 | `app` | PHP-FPM + Laravel，启动时自动生成 `APP_KEY`、建库并迁移 |
-| `scheduler` | 运行 `php artisan schedule:work`，执行后台设置的每日备份与季度演练 |
+| `scheduler` | 运行 `php artisan schedule:work`，执行每日备份、季度演练、每日健康自检与写作提醒 |
 
 SQLite（`storage/database.sqlite`）与附件、日志、缓存一起放在命名卷 `storage` 中，重建容器不会丢数据；`.env` 从宿主机挂载。备份 S3 凭证仍建议在「设置」页填写。Docker 内不需要系统 cron；**PWA 安装和 Service Worker 需要 HTTPS 或 localhost**，公网部署请在前面加 TLS 反代并把 `APP_URL` 设为 HTTPS 地址。
 
@@ -75,6 +76,16 @@ SQLite（`storage/database.sqlite`）与附件、日志、缓存一起放在命�
 - 联网后回到任意已登录页面会自动同步（后台同步 API 可用时也会触发），草稿按日期幂等写入服务器。
 
 限制：离线草稿只保存文字字段（标题、正文、标签、心情、天气），**不缓存/上传图片**；Service Worker 不会缓存任何日记页面或附件。共用设备请在「离线写作」页清空本机草稿。
+
+### 安心机制
+
+- **同步冲突防护**：每篇日记带 `revision`。在线编辑器、自动保存与离线草稿同步都会带上打开时的版本号；若服务器版本已变，返回 409 并把新内容存成「冲突副本」，绝不静默覆盖。可在编辑器或离线写作页对比、恢复副本或用本机内容覆盖。
+- **备份健康看板**：「设置」页与日记列表顶部显示最近备份/演练状态和告警阈值；备份失败、演练失败、超过阈值没有成功备份时通过邮件或 Webhook 通知。Webhook 只接受 http/https，避免被滥用。
+- **每日提醒**：到设定时间发现当天还没写，发一条温和提醒（可带连续写作天数）；已写过或当天已提醒过就不会重复打扰。
+- **命令**：`php artisan diary:health`（数据库完整性、FTS 索引、孤立附件、备份新鲜度）与 `php artisan diary:remind`。健康自检每天 09:00 由调度器触发。
+- **外观**：顶栏切换 自动 / 浅色 / 深色主题（跟随系统偏好，选择存在本机）；编辑器「专注」按钮隐藏顶栏与附件区，Esc 退出。
+
+> 邮件通知需要在 `.env` 配置 SMTP；只填 Webhook 时无需改动 `.env`。收件地址与 Webhook 在「设置」页加密保存，可用「发送测试通知」验证。
 
 ### 运行测试
 
@@ -123,6 +134,7 @@ php artisan test
 - **Settings**: configure S3/COS/R2 credentials, backup passphrase, daily backup and quarterly drill schedules in the UI; secrets encrypted at rest, no `.env` editing needed
 - **Offline writing**: installable PWA; drafts are saved locally while offline and synced after you sign in again. The service worker caches only public static assets — never entries, attachments or POST requests
 - **Deployment**: one-command Docker Compose (web, app, scheduler) and GitHub Actions running tests and image builds
+- **Peace of mind**: revision-based conflict protection (no silent overwrites), backup health dashboard with alerts, daily writing reminders with streaks, dark theme and focus mode
 
 ### Stack
 
@@ -157,6 +169,16 @@ Visit `http://localhost:8000/login` (`PORT=8080 docker compose up -d` changes th
 ### Offline writing (PWA)
 
 Open the site in a supporting browser to register the service worker, then use "Install app" from the browser menu. While offline the editor keeps writing text drafts into `localStorage`; reconnect and sign in to sync them automatically. The "离线写作" page lists local drafts and lets you sync or clear them. Offline drafts contain text fields only (no images), and diary pages/attachments are never cached. Clear local drafts on shared devices.
+
+### Peace of mind
+
+- **Conflict protection**: every entry carries a `revision`. The editor, autosave and offline sync send the version they loaded; if the server moved on, the save is rejected with 409 and stored as a "conflict copy" instead of overwriting. Compare, restore or force-overwrite from the editor or offline page.
+- **Backup health**: the settings page and diary list show the latest backup/drill status. Failures or a backup older than the threshold trigger email or Webhook notifications; only http/https Webhooks are accepted.
+- **Daily reminder**: a gentle nudge at the configured time when today's entry is still empty, optionally including the current streak. No duplicate reminders.
+- **Commands**: `php artisan diary:health` (database integrity, FTS index, orphan attachments, backup freshness) and `php artisan diary:remind`; the health check is scheduled daily at 09:00.
+- **Appearance**: cycle auto / light / dark in the top bar (follows the OS in auto mode, saved per device); the editor's "专注" button hides navigation, Esc exits.
+
+> Email notifications need SMTP configured in `.env`; a Webhook alone needs no `.env` change. Recipient and Webhook are encrypted in the UI and can be verified with "发送测试通知".
 
 ### Tests
 

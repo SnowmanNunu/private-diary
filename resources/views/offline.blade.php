@@ -7,10 +7,19 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="私密日记">
     <title>离线写作 · {{ config('app.name') }}</title>
+    <script>
+        (function () {
+            try {
+                var m = localStorage.getItem('private-diary:theme') || 'auto';
+                var dark = m === 'dark' || (m === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
+                document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+            } catch (e) { /* 隐私模式 */ }
+        })();
+    </script>
     <link rel="manifest" href="{{ asset('manifest.webmanifest') }}">
     <link rel="icon" href="{{ asset('icons/icon.svg') }}" type="image/svg+xml">
     <link rel="apple-touch-icon" href="{{ asset('icons/icon-192.png') }}">
-    <link rel="stylesheet" href="{{ asset('css/app.css') }}?v=4">
+    <link rel="stylesheet" href="{{ asset('css/app.css') }}?v=5">
 </head>
 <body class="offline-body">
 <div class="shell">
@@ -21,6 +30,7 @@
         </a>
         <nav class="topnav">
             <span class="pwa-status" id="network-state">离线写作</span>
+            <button type="button" class="link-button theme-toggle" id="theme-toggle" aria-label="切换主题">自动主题</button>
             <a href="/diary">返回日记</a>
         </nav>
     </header>
@@ -83,6 +93,7 @@
 </div>
 
 <script src="{{ asset('js/offline-drafts.js') }}"></script>
+<script src="{{ asset('js/theme.js') }}"></script>
 <script>
 (function () {
     var drafts = window.OfflineDrafts;
@@ -106,7 +117,15 @@
     }
 
     function fields() {
-        return { title: title.value, tags: tags.value, mood: mood.value, weather: weather.value, body: body.value };
+        var existing = drafts.get(date.value);
+        return {
+            title: title.value,
+            tags: tags.value,
+            mood: mood.value,
+            weather: weather.value,
+            body: body.value,
+            revision: existing && typeof existing.revision === 'number' ? existing.revision : 0,
+        };
     }
 
     function say(message) { state.textContent = message; }
@@ -128,13 +147,46 @@
         dates.forEach(function (value) {
             var draft = draftsById[value];
             var li = document.createElement('li');
-            li.className = 'draft-item' + (draft.pending ? ' pending' : '');
+            li.className = 'draft-item' + (draft.conflict ? ' conflict' : (draft.pending ? ' pending' : ''));
             var button = document.createElement('button');
             button.type = 'button';
             button.className = 'link-button';
-            button.textContent = value + (draft.pending ? ' · 待同步' : ' · 已同步');
+            button.textContent = value + (draft.conflict ? ' · 版本冲突' : (draft.pending ? ' · 待同步' : ' · 已同步'));
             button.addEventListener('click', function () { load(value); });
             li.appendChild(button);
+
+            if (draft.conflict) {
+                var actions = document.createElement('div');
+                actions.className = 'draft-conflict-actions';
+                var overwrite = document.createElement('button');
+                overwrite.type = 'button';
+                overwrite.className = 'link-button';
+                overwrite.textContent = '用本机内容覆盖';
+                overwrite.addEventListener('click', async function () {
+                    try {
+                        await drafts.overwrite(value);
+                        renderList();
+                        load(value);
+                        say(value + ' 已用本机内容覆盖服务器版本。');
+                    } catch (e) {
+                        say('覆盖失败，请到在线编辑器处理。');
+                    }
+                });
+                var discard = document.createElement('button');
+                discard.type = 'button';
+                discard.className = 'link-button danger';
+                discard.textContent = '删除本机副本';
+                discard.addEventListener('click', function () {
+                    if (!confirm('删除这份本机副本？服务器上的内容会保留。')) return;
+                    drafts.remove(value);
+                    renderList();
+                    load(value);
+                    say('已删除本机副本。');
+                });
+                actions.append(overwrite, discard);
+                li.appendChild(actions);
+            }
+
             items.appendChild(li);
         });
     }
@@ -171,8 +223,10 @@
         var result = await drafts.syncAll();
         renderList();
         if (result.expired) say('会话已过期，请重新登录后再同步；草稿仍在本机。');
+        else if (result.conflicts) say(result.conflicts + ' 篇发生版本冲突，内容已保留，请在列表中选择覆盖或删除。');
         else if (result.failed) say('同步失败 ' + result.failed + ' 篇，草稿仍在本机。');
         else if (result.total) say('已同步 ' + result.ok + ' 篇。');
+        else if (drafts.conflicts().length) say('有 ' + drafts.conflicts().length + ' 篇版本冲突待处理。');
         else say('没有待同步的草稿。');
     }
 

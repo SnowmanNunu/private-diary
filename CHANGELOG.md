@@ -1,5 +1,23 @@
 # 更新日志 / Changelog
 
+## [0.6.0] - 2026-11-27
+
+安心版本 / Peace-of-mind release.
+
+### Added
+
+- 同步冲突防护：`entries.revision` + `entry_conflicts` 表；在线编辑器、自动保存与 PWA 离线草稿都携带版本号，冲突时返回 409 并保留副本，可恢复、删除或强制覆盖
+- 备份健康看板：`backup_audits.kind` 区分备份与演练，首页与设置页显示状态、阈值与最近时间；失败或过期通过邮件 / Webhook 告警
+- `diary:health` 自检命令（SQLite 完整性、FTS5 索引、孤立附件、备份新鲜度）与 `diary:remind` 每日写作提醒，均接入动态调度
+- 连续写作天数徽标、通知设置（含「发送测试通知」）、Webhook 仅允许 http/https
+- 暗色主题（自动/浅色/深色，跟随系统并本地持久化）与编辑器专注模式；CSS 升至 v5、Service Worker 缓存升至 v2
+- 11 项新测试，全套 82 项测试通过（455 断言）
+
+### Changed
+
+- 备份命令现在会写审计记录并在失败时通知；恢复演练审计显式标记 `kind=verify`
+- 编辑器自动保存成功后同步更新本机版本号与草稿状态，避免重复冲突
+
 ## [0.5.0] - 2026-11-27
 
 部署与离线版本 / Deployment & offline release.

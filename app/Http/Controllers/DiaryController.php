@@ -3,8 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\Entry;
+use App\Models\EntryConflict;
 use App\Models\Tag;
+use App\Services\BackupHealth;
 use App\Services\DiaryIcons;
+use App\Services\DiaryStats;
 use App\Services\EntrySearch;
 use App\Services\Highlight;
 use App\Services\LastYearReview;
@@ -83,6 +86,8 @@ class DiaryController extends Controller
             'highlight' => $this->highlight,
             'icons' => $this->icons,
             'lastYearEntry' => $this->review->today(),
+            'health' => app(BackupHealth::class)->status(),
+            'streak' => app(DiaryStats::class)->streak(),
             'tags' => Tag::where('user_id', Auth::id())
                 ->withCount('entries')
                 ->orderBy('name')
@@ -102,6 +107,11 @@ class DiaryController extends Controller
             'moods' => config('diary.moods'),
             'weathers' => config('diary.weather'),
             'icons' => $this->icons,
+            'conflict' => session('conflict'),
+            'conflicts' => EntryConflict::where('user_id', Auth::id())
+                ->where('entry_date', $date)
+                ->latest()
+                ->get(),
         ]);
     }
 
@@ -132,6 +142,8 @@ class DiaryController extends Controller
             'tags' => ['nullable', 'string', 'max:500'],
             'mood' => ['nullable', 'string', 'max:20', Rule::in(array_keys(config('diary.moods')))],
             'weather' => ['nullable', 'string', 'max:20', Rule::in(array_keys(config('diary.weather')))],
+            'revision' => ['nullable', 'integer', 'min:0'],
+            'force' => ['nullable', 'boolean'],
         ]);
 
         $entry = Entry::firstOrNew([
@@ -139,17 +151,19 @@ class DiaryController extends Controller
             'entry_date' => $date,
         ]);
 
-        $entry->title = $data['title'] ?? null;
-        $entry->body = $data['body'] ?? null;
-        $entry->mood = $data['mood'] ?? null;
-        $entry->weather = $data['weather'] ?? null;
+        $clientRevision = isset($data['revision']) ? (int) $data['revision'] : null;
+        $force = $request->boolean('force');
 
-        if (! $request->boolean('autosave')) {
-            $entry->status = 'published';
-        } elseif (! $entry->exists) {
-            $entry->status = 'draft';
+        // 多设备 / 离线草稿同时写同一天时，绝不静默覆盖：先留副本再拒绝。
+        if ($entry->exists
+            && ! $force
+            && $clientRevision !== null
+            && $clientRevision !== (int) $entry->revision) {
+            return $this->conflictResponse($request, $entry, $data, $clientRevision);
         }
 
+        $this->applyFields($entry, $data, $request->boolean('autosave'));
+        $entry->revision = $entry->exists ? (int) $entry->revision + 1 : 1;
         $entry->save();
 
         if ($request->has('tags')) {
@@ -161,11 +175,106 @@ class DiaryController extends Controller
                 'ok' => true,
                 'id' => $entry->id,
                 'status' => $entry->status,
+                'revision' => $entry->revision,
                 'saved_at' => now()->format('H:i:s'),
             ]);
         }
 
         return redirect()->route('diary.show', $date)->with('status', '已保存');
+    }
+
+    /** @param array<string, mixed> $data */
+    private function conflictResponse(Request $request, Entry $entry, array $data, int $clientRevision)
+    {
+        $copy = EntryConflict::create([
+            'user_id' => Auth::id(),
+            'entry_id' => $entry->id,
+            'entry_date' => $entry->entry_date,
+            'title' => $data['title'] ?? null,
+            'body' => $data['body'] ?? null,
+            'tags' => $data['tags'] ?? null,
+            'mood' => $data['mood'] ?? null,
+            'weather' => $data['weather'] ?? null,
+            'source' => $request->boolean('autosave') ? 'autosave' : 'form',
+            'client_revision' => $clientRevision,
+            'server_revision' => (int) $entry->revision,
+        ]);
+
+        $server = [
+            'title' => $entry->title,
+            'body' => $entry->body,
+            'tags' => $entry->tags->pluck('name')->implode(', '),
+            'mood' => $entry->mood,
+            'weather' => $entry->weather,
+            'revision' => (int) $entry->revision,
+        ];
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'conflict' => true,
+                'message' => '检测到其他设备已修改这一天的日记。',
+                'server_revision' => (int) $entry->revision,
+                'server' => $server,
+                'conflict_id' => $copy->id,
+            ], 409);
+        }
+
+        return back()->withInput()
+            ->withErrors(['conflict' => '检测到其他设备已修改这一天的日记，你刚写的内容已保存为冲突副本，不会丢失。'])
+            ->with('conflict', [
+                'id' => $copy->id,
+                'server' => $server,
+            ]);
+    }
+
+    /** @param array<string, mixed> $data */
+    private function applyFields(Entry $entry, array $data, bool $autosave): void
+    {
+        $entry->title = $data['title'] ?? null;
+        $entry->body = $data['body'] ?? null;
+        $entry->mood = $data['mood'] ?? null;
+        $entry->weather = $data['weather'] ?? null;
+
+        if (! $autosave) {
+            $entry->status = 'published';
+        } elseif (! $entry->exists) {
+            $entry->status = 'draft';
+        }
+    }
+
+    public function restoreConflict(Request $request, string $date, EntryConflict $conflict)
+    {
+        $date = $this->validDate($date);
+        abort_unless($conflict->user_id === Auth::id(), 404);
+        abort_unless($conflict->entry_date->toDateString() === $date, 404);
+
+        $entry = Entry::firstOrNew([
+            'user_id' => Auth::id(),
+            'entry_date' => $date,
+        ]);
+
+        $entry->title = $conflict->title;
+        $entry->body = $conflict->body;
+        $entry->mood = $conflict->mood;
+        $entry->weather = $conflict->weather;
+        $entry->revision = $entry->exists ? (int) $entry->revision + 1 : 1;
+        $entry->save();
+
+        $this->syncTags($entry, $conflict->tags);
+        $conflict->delete();
+
+        return redirect()->route('diary.create', ['date' => $date])->with('status', '冲突副本已恢复为当前内容。');
+    }
+
+    public function destroyConflict(Request $request, string $date, EntryConflict $conflict)
+    {
+        $this->validDate($date);
+        abort_unless($conflict->user_id === Auth::id(), 404);
+        abort_unless($conflict->entry_date->toDateString() === $date, 404);
+
+        $conflict->delete();
+
+        return redirect()->route('diary.create', ['date' => $date])->with('status', '冲突副本已删除。');
     }
 
     public function destroy(string $date)
