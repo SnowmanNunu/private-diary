@@ -41,6 +41,22 @@ class OfflineSyncDiagnosticsTest extends TestCase
         ])->assertRedirect(route('login'));
     }
 
+    public function test_health_command_reports_pending_migrations(): void
+    {
+        \Illuminate\Support\Facades\DB::table('migrations')
+            ->where('migration', 'like', '%000009_add_revisions_and_conflicts%')
+            ->delete();
+
+        $this->artisan('diary:health')
+            ->expectsOutputToContain('待执行 1 项')
+            ->assertFailed();
+
+        $this->assertStringContainsString(
+            'php artisan migrate --force',
+            file_get_contents(app_path('Console/Commands/HealthCommand.php')),
+        );
+    }
+
     public function test_offline_sync_detects_auth_failures_and_reports_a_reason(): void
     {
         $js = file_get_contents(public_path('js/offline-drafts.js'));

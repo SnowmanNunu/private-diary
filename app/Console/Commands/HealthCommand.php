@@ -13,12 +13,30 @@ class HealthCommand extends Command
 {
     protected $signature = 'diary:health';
 
-    protected $description = '自检数据库、全文索引、孤立附件与备份新鲜度，并在异常时发通知';
+    protected $description = '自检迁移状态、数据库完整性、全文索引、孤立附件与备份新鲜度，并在异常时发通知';
 
     public function handle(): int
     {
         $checks = [];
         $failed = false;
+
+        // 代码升级后若忘记执行迁移，写入 revision 等新列会直接 500，
+        // 而离线同步只会显示「同步失败」。这里把待执行迁移显式报出来。
+        try {
+            $ran = DB::table('migrations')->pluck('migration')->all();
+            $files = glob(database_path('migrations/*.php')) ?: [];
+            $pending = array_values(array_diff(
+                array_map(static fn (string $path): string => pathinfo($path, PATHINFO_FILENAME), $files),
+                $ran,
+            ));
+            $checks[] = ['数据库迁移', $pending
+                ? '待执行 '.count($pending).' 项：'.implode(', ', $pending).'（请运行 php artisan migrate --force）'
+                : 'ok'];
+            $failed = $failed || $pending !== [];
+        } catch (Throwable $exception) {
+            $checks[] = ['数据库迁移', '失败：'.$exception->getMessage()];
+            $failed = true;
+        }
 
         try {
             $integrity = DB::selectOne('PRAGMA integrity_check');
