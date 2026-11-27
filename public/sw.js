@@ -4,7 +4,7 @@
  */
 'use strict';
 
-const CACHE = 'private-diary-shell-v3';
+const CACHE = 'private-diary-shell-v4';
 const SHELL = [
     '/offline',
     '/css/app.css',

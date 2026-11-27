@@ -17,8 +17,8 @@ A self-hosted, single-user diary: Markdown writing, tags and full-text search, c
 - **写作**：按日期一篇，Markdown 编辑与实时预览，1.2 秒防抖自动保存，`Ctrl/⌘ + S` 手动保存
 - **整理**：逗号分隔标签、带 SVG 图标的心情/天气记录与筛选、关键词高亮、日期范围筛选、中文全文搜索（FTS5 trigram，短词用子串兜底）
 - **回顾**：月历视图、去年今日 / 去年同日
-- **附件**：私有图片上传，鉴权路由访问，删除日记时同步清理文件
-- **导出与导入**：Markdown ZIP（按年分目录、图片相对链接、`manifest.json`）与结构化 JSON；导入支持按日期幂等、冲突策略与图片恢复
+- **附件**：私有图片与文档上传（PDF、Word、Excel、PPT、TXT、CSV、ZIP），鉴权路由访问、按类型预览或下载，删除日记时同步清理文件；点「插入」可把附件链接写进正文
+- **导出与导入**：Markdown ZIP（按年分目录、图片/文档相对链接、`manifest.json`）与结构化 JSON；导入支持按日期幂等、冲突策略与附件恢复
 - **统计**：年度篇数/字数/连续天数、写作热力图、每月篇数与常用标签
 - **安全**：单用户、无注册入口、登录限速、会话加密、TOTP 二重验证与一次性恢复码
 - **备份**：SQLite 一致性快照 + 附件打包 + AES-256-GCM 加密 + 异地磁盘，附带恢复演练与审计
@@ -66,6 +66,16 @@ docker compose exec app php artisan diary:user   # 按提示创建唯一用户
 | `scheduler` | 运行 `php artisan schedule:work`，执行每日备份、季度演练、每日健康自检与写作提醒 |
 
 SQLite（`storage/database.sqlite`）与附件、日志、缓存一起放在命名卷 `storage` 中，重建容器不会丢数据；`.env` 从宿主机挂载。备份 S3 凭证仍建议在「设置」页填写。Docker 内不需要系统 cron；**PWA 安装和 Service Worker 需要 HTTPS 或 localhost**，公网部署请在前面加 TLS 反代并把 `APP_URL` 设为 HTTPS 地址。
+
+### 文件附件
+
+写日志页的「附件」区可分别上传图片和文档：
+
+- 图片：JPG / PNG / GIF / WebP，单张最多 8 MB，缩略预览，以 `![文件名](链接)` 插入正文。
+- 文档：PDF、Word（doc/docx）、Excel（xls/xlsx）、PPT（ppt/pptx）、TXT、CSV、ZIP，单个最多 20 MB，以 `[文件名](链接)` 插入正文。
+- 一次最多 6 个文件；服务器同时校验扩展名、内容 MIME 及两者是否一致，伪装文件会被拒绝。
+- 图片与 PDF 在浏览器内预览，Office 文档强制下载；附件走鉴权路由且禁止缓存，只有所属用户能访问。
+- 导出 ZIP 会带上全部附件并在导入时恢复；阅读页显示附件卡片。离线草稿仍只保存文字，不含附件。
 
 ### 离线写作（PWA）
 
@@ -133,7 +143,7 @@ php artisan test
 - **Write**: one entry per day, Markdown editor with live preview, debounced autosave (1.2s), `Ctrl/⌘ + S` to save
 - **Organize**: comma-separated tags, mood and weather with SVG icons and filters, highlighted search matches, date-range filtering, Chinese full-text search (SQLite FTS5 trigram with substring fallback)
 - **Reflect**: monthly calendar, "on this day last year" on the list and reading pages
-- **Attachments**: private image uploads served through authenticated routes; files removed with their entry
+- **Attachments**: private image and document uploads (PDF, Word, Excel, PPT, TXT, CSV, ZIP) served through authenticated routes, previewed or downloaded by type, removable with their entry; insert a link into the entry with one click
 - **Export & import**: Markdown ZIP (yearly folders, relative image links, `manifest.json`) and structured JSON; date-based idempotent import with conflict strategies and image restoration
 - **Stats**: annual entry/word counts, streaks, contribution-style heatmap, monthly counts and top tags
 - **Security**: single user, no registration, login throttling, encrypted sessions, TOTP 2FA with one-time recovery codes
@@ -172,6 +182,16 @@ docker compose exec app php artisan diary:user
 ```
 
 Visit `http://localhost:8000/login` (`PORT=8080 docker compose up -d` changes the port). The `web` service is nginx, `app` is PHP-FPM (bootstraps `APP_KEY`, SQLite and migrations), and `scheduler` runs `php artisan schedule:work`. SQLite (`storage/database.sqlite`) and all attachments/logs live in the `storage` named volume; `.env` is bind-mounted from the host. No system cron is needed inside Docker. PWA installation requires HTTPS or localhost — put a TLS reverse proxy in front and set `APP_URL` to the HTTPS address in production.
+
+### File attachments
+
+The editor's attachment panel accepts images and documents separately:
+
+- Images: JPG / PNG / GIF / WebP, up to 8 MB each, shown as thumbnails and inserted as `![name](url)`.
+- Documents: PDF, Word (doc/docx), Excel (xls/xlsx), PPT (ppt/pptx), TXT, CSV, ZIP, up to 20 MB each, inserted as `[name](url)`.
+- Up to 6 files at a time; the server checks extension, content MIME and their consistency, so disguised files are rejected.
+- Images and PDFs are previewed inline; Office documents are downloaded. Every attachment goes through an authenticated route with caching disabled and is visible only to its owner.
+- ZIP exports include all attachments and restore them on import. Offline drafts remain text-only.
 
 ### Offline writing (PWA)
 

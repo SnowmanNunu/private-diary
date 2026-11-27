@@ -29,6 +29,7 @@ class DiaryExporter
                     'original_name' => $attachment->original_name,
                     'mime' => $attachment->mime,
                     'size' => $attachment->size,
+                    'kind' => $attachment->kind,
                 ])->all(),
             ])->all(),
         ];

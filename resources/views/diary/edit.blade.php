@@ -136,22 +136,37 @@
 
 <div class="attachments-panel">
     <div class="attachments-head">
-        <h2>图片附件</h2>
-        <label class="upload-button">
-            上传图片
-            <input type="file" id="image-input" accept="image/jpeg,image/png,image/gif,image/webp" multiple hidden>
-        </label>
+        <h2>附件</h2>
+        <div class="upload-actions">
+            <label class="upload-button">
+                上传图片
+                <input type="file" id="image-input" accept="image/jpeg,image/png,image/gif,image/webp" multiple hidden>
+            </label>
+            <label class="upload-button">
+                上传文档
+                <input type="file" id="document-input" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip" multiple hidden>
+            </label>
+        </div>
     </div>
-    <p class="muted">单张最多 8 MB，一次最多 6 张。图片只存在你的私有目录。</p>
+    <p class="muted">图片单张最多 8 MB；文档单个最多 20 MB（PDF、Word、Excel、PPT、TXT、CSV、ZIP）。一次最多 6 个，文件只存在你的私有目录。</p>
     <div id="upload-state" class="muted"></div>
     <div id="attachment-list" class="attachment-list">
         @foreach ($entry?->attachments ?? [] as $attachment)
-            <div class="attachment-item" data-id="{{ $attachment->id }}">
-                <a href="{{ route('attachments.show', $attachment) }}" target="_blank" rel="noopener">
-                    <img src="{{ route('attachments.show', $attachment) }}" alt="{{ $attachment->original_name }}">
-                </a>
+            <div class="attachment-item {{ $attachment->isImage() ? '' : 'attachment-file' }}" data-id="{{ $attachment->id }}">
+                @if ($attachment->isImage())
+                    <a href="{{ route('attachments.show', $attachment) }}" target="_blank" rel="noopener">
+                        <img src="{{ route('attachments.show', $attachment) }}" alt="{{ $attachment->original_name }}">
+                    </a>
+                    <div class="attachment-caption">{{ $attachment->original_name }}</div>
+                @else
+                    <a class="file-link" href="{{ route('attachments.show', $attachment) }}" target="_blank" rel="noopener">
+                        <span class="file-icon">{{ $attachment->badge() }}</span>
+                        <span class="file-name">{{ $attachment->original_name }}</span>
+                        <span class="file-meta">{{ $attachment->sizeLabel() }}</span>
+                    </a>
+                @endif
                 <div class="attachment-actions">
-                    <button type="button" class="insert-image" data-markdown="![{{ $attachment->original_name }}]({{ route('attachments.show', $attachment) }})">插入</button>
+                    <button type="button" class="insert-image" data-markdown="{{ $attachment->markdown(route('attachments.show', $attachment)) }}">插入</button>
                     <button type="button" class="delete-image danger">移除</button>
                 </div>
             </div>
@@ -192,6 +207,7 @@
     const revisionInput = document.getElementById('editor-revision');
     const forceInput = document.getElementById('editor-force');
     const imageInput = document.getElementById('image-input');
+    const documentInput = document.getElementById('document-input');
     const uploadState = document.getElementById('upload-state');
     const attachmentList = document.getElementById('attachment-list');
     let timer = null;
@@ -410,23 +426,49 @@
         body.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
+    function escapeHtml(value) {
+        const entities = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+        return String(value).replace(/[&<>"']/g, (char) => entities[char]);
+    }
+
+    function formatSize(bytes) {
+        const value = Number(bytes) || 0;
+        if (value < 1024) return value + ' B';
+        if (value < 1024 * 1024) return (value / 1024).toFixed(1) + ' KB';
+        return (value / 1024 / 1024).toFixed(1) + ' MB';
+    }
+
     function addAttachment(attachment) {
+        const isFile = attachment.kind === 'file';
         const item = document.createElement('div');
-        item.className = 'attachment-item';
+        item.className = 'attachment-item' + (isFile ? ' attachment-file' : '');
         item.dataset.id = attachment.id;
-        item.innerHTML = '<a href="' + attachment.url + '" target="_blank" rel="noopener"><img src="' + attachment.url + '" alt="图片"></a>'
-            + '<div class="attachment-actions">'
-            + '<button type="button" class="insert-image">插入</button>'
-            + '<button type="button" class="delete-image danger">移除</button>'
-            + '</div>';
-        item.querySelector('.insert-image').dataset.markdown = attachment.markdown;
+        const safeUrl = escapeHtml(attachment.url);
+        item.innerHTML = isFile
+            ? '<a class="file-link" href="' + safeUrl + '" target="_blank" rel="noopener">'
+                + '<span class="file-icon">' + escapeHtml(attachment.badge) + '</span>'
+                + '<span class="file-name">' + escapeHtml(attachment.name) + '</span>'
+                + '<span class="file-meta">' + formatSize(attachment.size) + '</span></a>'
+            : '<a href="' + safeUrl + '" target="_blank" rel="noopener"><img src="' + safeUrl + '" alt="' + escapeHtml(attachment.name) + '"></a>'
+                + '<div class="attachment-caption">' + escapeHtml(attachment.name) + '</div>';
+
+        const actions = document.createElement('div');
+        actions.className = 'attachment-actions';
+        const insert = document.createElement('button');
+        insert.type = 'button';
+        insert.className = 'insert-image';
+        insert.textContent = '插入';
+        insert.dataset.markdown = attachment.markdown;
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'delete-image danger';
+        remove.textContent = '移除';
+        actions.append(insert, remove);
+        item.appendChild(actions);
         attachmentList.appendChild(item);
     }
 
-    imageInput.addEventListener('change', async () => {
-        if (!imageInput.files.length) return;
-        const data = new FormData();
-        Array.from(imageInput.files).forEach((file) => data.append('images[]', file));
+    async function uploadFiles(data) {
         uploadState.textContent = '正在上传…';
         try {
             const response = await fetch(uploadUrl, {
@@ -434,14 +476,33 @@
                 headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': token },
                 body: data,
             });
-            if (!response.ok) throw new Error('upload failed');
+            if (!response.ok) {
+                const body = await response.json().catch(() => ({}));
+                throw new Error(body.message || 'upload failed');
+            }
             const result = await response.json();
             result.attachments.forEach(addAttachment);
-            uploadState.textContent = '已上传 ' + result.attachments.length + ' 张图片。';
+            uploadState.textContent = '已上传 ' + result.attachments.length + ' 个附件。';
         } catch (e) {
-            uploadState.textContent = '上传失败，请检查文件类型和大小。';
+            const message = e && e.message && e.message !== 'upload failed' ? e.message : '请检查文件类型和大小。';
+            uploadState.textContent = '上传失败：' + message;
         }
+    }
+
+    imageInput.addEventListener('change', async () => {
+        if (!imageInput.files.length) return;
+        const data = new FormData();
+        Array.from(imageInput.files).forEach((file) => data.append('images[]', file));
+        await uploadFiles(data);
         imageInput.value = '';
+    });
+
+    documentInput.addEventListener('change', async () => {
+        if (!documentInput.files.length) return;
+        const data = new FormData();
+        Array.from(documentInput.files).forEach((file) => data.append('documents[]', file));
+        await uploadFiles(data);
+        documentInput.value = '';
     });
 
     attachmentList.addEventListener('click', async (event) => {
@@ -454,7 +515,7 @@
         }
 
         if (event.target.classList.contains('delete-image')) {
-            if (!confirm('确定移除这张图片？')) return;
+            if (!confirm('确定移除这个附件？')) return;
             try {
                 const response = await fetch('/attachments/' + item.dataset.id, {
                     method: 'DELETE',

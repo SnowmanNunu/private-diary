@@ -47,14 +47,22 @@
 
     @if ($entry->attachments->isNotEmpty())
         <section class="reader-attachments">
-            <h2>图片附件</h2>
+            <h2>附件</h2>
             <div class="attachment-list">
                 @foreach ($entry->attachments as $attachment)
-                    <div class="attachment-item">
-                        <a href="{{ route('attachments.show', $attachment) }}" target="_blank" rel="noopener">
-                            <img src="{{ route('attachments.show', $attachment) }}" alt="{{ $attachment->original_name }}">
-                        </a>
-                        <div class="attachment-caption">{{ $attachment->original_name }}</div>
+                    <div class="attachment-item {{ $attachment->isImage() ? '' : 'attachment-file' }}">
+                        @if ($attachment->isImage())
+                            <a href="{{ route('attachments.show', $attachment) }}" target="_blank" rel="noopener">
+                                <img src="{{ route('attachments.show', $attachment) }}" alt="{{ $attachment->original_name }}">
+                            </a>
+                            <div class="attachment-caption">{{ $attachment->original_name }}</div>
+                        @else
+                            <a class="file-link" href="{{ route('attachments.show', $attachment) }}" target="_blank" rel="noopener">
+                                <span class="file-icon">{{ $attachment->badge() }}</span>
+                                <span class="file-name">{{ $attachment->original_name }}</span>
+                                <span class="file-meta">{{ $attachment->sizeLabel() }}</span>
+                            </a>
+                        @endif
                     </div>
                 @endforeach
             </div>

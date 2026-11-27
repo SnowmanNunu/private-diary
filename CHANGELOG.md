@@ -1,5 +1,26 @@
 # 更新日志 / Changelog
 
+## [0.7.0] - 2026-11-27
+
+文档附件版本 / Document attachments release.
+
+### Added
+
+- 写日志页新增「上传文档」：PDF、Word（doc/docx）、Excel（xls/xlsx）、PPT（ppt/pptx）、TXT、CSV、ZIP，单个最多 20 MB，一次最多 6 个
+- 附件面板区分图片缩略图与文档卡片（类型徽标、文件名、大小），点「插入」把 `[文件名](链接)` 写进正文；阅读页同样展示
+- `attachments.kind` 区分 `image` / `file`（迁移 `000010`，历史附件默认 image）
+- 导出 JSON/ZIP 带 `kind`，导入白名单扩展文档 MIME、单附件上限提到 20 MB、ZIP 上限提到 100 MB，文档附件可完整往返
+- 新增 8 项测试，全套 94 项通过（532 断言）
+
+### Security
+
+- 扩展名、内容 MIME、两者一致性三重校验，拒绝伪装文件（例如把纯文本命名为 `.pdf`）
+- 图片与 PDF 内联预览，Word / Excel / PPT 一律强制下载；附件仍走鉴权路由且 `no-store`
+
+### Changed
+
+- CSS 升至 v6，Service Worker 缓存升至 v4
+
 ## [0.6.1] - 2026-11-27
 
 离线同步排障修复 / Offline sync diagnostics fix.

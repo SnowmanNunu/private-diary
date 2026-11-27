@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Entry;
 use App\Models\Tag;
+use App\Services\AttachmentTypes;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -16,11 +17,18 @@ class DiaryImporter
 {
     private const MAX_ENTRIES = 2000;
 
-    private const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
+    private const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 
     private const MAX_TOTAL_BYTES = 100 * 1024 * 1024;
 
-    private const ALLOWED_MIMES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    private const ALLOWED_MIMES = [
+        'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+        'application/pdf', 'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        'text/plain', 'text/csv', 'application/zip',
+    ];
 
     public function inspect(string $path, string $filename): array
     {
@@ -133,6 +141,9 @@ class DiaryImporter
                             'original_name' => (string) $attachment['original_name'],
                             'mime' => $binary['mime'],
                             'size' => strlen($binary['content']),
+                            'kind' => ($attachment['kind'] ?? null) === 'file'
+                                ? 'file'
+                                : AttachmentTypes::kindFor($binary['mime']),
                         ]);
 
                         $idMap[$oldId] = $created->id;
@@ -164,8 +175,8 @@ class DiaryImporter
             throw new RuntimeException('导入文件不存在');
         }
 
-        if (filesize($path) > 20 * 1024 * 1024) {
-            throw new RuntimeException('导入文件不能超过 20 MB');
+        if (filesize($path) > self::MAX_TOTAL_BYTES) {
+            throw new RuntimeException('导入文件不能超过 100 MB');
         }
 
         if (str_ends_with(strtolower($filename), '.zip')) {
@@ -225,7 +236,7 @@ class DiaryImporter
                 $size = (int) ($stat['size'] ?? 0);
 
                 if ($size > self::MAX_ATTACHMENT_BYTES) {
-                    $warnings[] = basename($name).' 超过单图 8 MB，已跳过。';
+                    $warnings[] = basename($name).' 超过单个附件 20 MB，已跳过。';
                     continue;
                 }
 
@@ -244,7 +255,7 @@ class DiaryImporter
                 $mime = $this->detectMime($content);
 
                 if (! in_array($mime, self::ALLOWED_MIMES, true)) {
-                    $warnings[] = basename($name).' 不是允许的图片格式，已跳过。';
+                    $warnings[] = basename($name).' 不是允许的附件格式，已跳过。';
                     continue;
                 }
 

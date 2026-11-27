@@ -4,8 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\Attachment;
 use App\Models\Entry;
+use App\Services\AttachmentTypes;
 use Carbon\Carbon;
+use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 
@@ -16,9 +19,32 @@ class AttachmentController extends Controller
         $date = $this->validDate($date);
 
         $data = $request->validate([
-            'images' => ['required', 'array', 'max:6'],
-            'images.*' => ['required', 'image', 'mimes:jpg,jpeg,png,gif,webp', 'max:8192'],
+            'images' => ['nullable', 'array', 'max:'.AttachmentTypes::MAX_PER_UPLOAD],
+            'images.*' => [
+                'required', 'image', 'mimes:'.AttachmentTypes::IMAGE_EXTENSIONS,
+                'mimetypes:'.implode(',', AttachmentTypes::IMAGE_MIMES),
+                'max:'.AttachmentTypes::MAX_IMAGE_KB,
+                $this->mimeConsistencyRule(),
+            ],
+            'documents' => ['nullable', 'array', 'max:'.AttachmentTypes::MAX_PER_UPLOAD],
+            'documents.*' => [
+                'required', 'file', 'mimes:'.AttachmentTypes::DOCUMENT_EXTENSIONS,
+                'mimetypes:'.implode(',', array_keys(AttachmentTypes::DOCUMENT_MIMES)),
+                'max:'.AttachmentTypes::MAX_DOCUMENT_KB,
+                $this->mimeConsistencyRule(),
+            ],
         ]);
+
+        $images = $data['images'] ?? [];
+        $documents = $data['documents'] ?? [];
+
+        if ($images === [] && $documents === []) {
+            return response()->json(['message' => '请选择要上传的文件。'], 422);
+        }
+
+        if (count($images) + count($documents) > AttachmentTypes::MAX_PER_UPLOAD) {
+            return response()->json(['message' => '一次最多上传 '.AttachmentTypes::MAX_PER_UPLOAD.' 个文件。'], 422);
+        }
 
         $entry = Entry::firstOrNew([
             'user_id' => Auth::id(),
@@ -32,26 +58,39 @@ class AttachmentController extends Controller
 
         $attachments = [];
 
-        foreach ($data['images'] as $file) {
-            $path = $file->store(
-                'attachments/'.Auth::id().'/'.now()->format('Y/m'),
-                'local',
-            );
+        foreach ([['files' => $images, 'kind' => 'image'], ['files' => $documents, 'kind' => 'file']] as $group) {
+            foreach ($group['files'] as $file) {
+                $path = $file->store(
+                    'attachments/'.Auth::id().'/'.now()->format('Y/m'),
+                    'local',
+                );
 
-            $attachment = Attachment::create([
-                'user_id' => Auth::id(),
-                'entry_id' => $entry->id,
-                'path' => $path,
-                'original_name' => $file->getClientOriginalName(),
-                'mime' => $file->getMimeType(),
-                'size' => $file->getSize(),
-            ]);
+                $mime = $file->getMimeType() ?: 'application/octet-stream';
+                $kind = $group['kind'];
 
-            $attachments[] = [
-                'id' => $attachment->id,
-                'url' => route('attachments.show', $attachment),
-                'markdown' => '!['.$attachment->original_name.']('.route('attachments.show', $attachment).')',
-            ];
+                $attachment = Attachment::create([
+                    'user_id' => Auth::id(),
+                    'entry_id' => $entry->id,
+                    'path' => $path,
+                    'original_name' => $file->getClientOriginalName(),
+                    'mime' => $mime,
+                    'size' => $file->getSize(),
+                    'kind' => $kind,
+                ]);
+
+                $url = route('attachments.show', $attachment);
+                $attachments[] = [
+                    'id' => $attachment->id,
+                    'name' => $attachment->original_name,
+                    'kind' => $kind,
+                    'badge' => $attachment->badge(),
+                    'size' => (int) $attachment->size,
+                    'url' => $url,
+                    'markdown' => $kind === 'image'
+                        ? '!['.$attachment->original_name.']('.$url.')'
+                        : '['.$attachment->original_name.']('.$url.')',
+                ];
+            }
         }
 
         return response()->json(['ok' => true, 'attachments' => $attachments], 201);
@@ -62,11 +101,17 @@ class AttachmentController extends Controller
         abort_if($attachment->user_id !== Auth::id(), 404);
         abort_unless(Storage::disk('local')->exists($attachment->path), 404);
 
+        // 图片与 PDF 可在浏览器内预览；Word / Excel / PPT 等一律强制下载，
+        // 避免浏览器错误解析或执行文件内容。
+        $disposition = $attachment->isImage() || $attachment->mime === 'application/pdf'
+            ? 'inline'
+            : 'attachment';
+
         return Storage::disk('local')->response(
             $attachment->path,
             $attachment->original_name,
             ['Cache-Control' => 'private, no-store'],
-            'inline',
+            $disposition,
         );
     }
 
@@ -78,6 +123,22 @@ class AttachmentController extends Controller
         $attachment->delete();
 
         return response()->json(['ok' => true]);
+    }
+
+    private function mimeConsistencyRule(): Closure
+    {
+        return static function (string $attribute, mixed $value, Closure $fail): void {
+            if (! $value instanceof UploadedFile) {
+                return;
+            }
+
+            if (! AttachmentTypes::extensionMatchesMime(
+                $value->getClientOriginalExtension(),
+                (string) $value->getMimeType(),
+            )) {
+                $fail('文件扩展名与实际内容不一致。');
+            }
+        };
     }
 
     private function validDate(string $date): string
