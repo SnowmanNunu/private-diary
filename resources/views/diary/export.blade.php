@@ -8,7 +8,7 @@
         <h1>导出</h1>
         <p class="muted">当前共 {{ $entryCount }} 篇日记。导出文件包含全部正文、标签和附件，仅在你登录后可下载。</p>
     </div>
-    <a href="{{ route('diary.index') }}">返回列表</a>
+    <a href="{{ route('diary.import') }}">导入数据</a>
 </div>
 
 <div class="export-grid">
@@ -27,5 +27,5 @@
     </section>
 </div>
 
-<div class="notice export-note">备份包建议加密后再上传到外部存储；导入功能尚未提供，请确保同时保留 ZIP 与 JSON。</div>
+<div class="notice export-note">备份包建议加密后再上传到外部存储；同时保留 ZIP 与 JSON，可到「导入数据」完整恢复。</div>
 @endsection

@@ -18,7 +18,8 @@
             <nav class="topnav">
                 <a class="{{ request()->routeIs('diary.index', 'diary.show') ? 'active' : '' }}" href="{{ route('diary.index') }}">日记</a>
                 <a class="{{ request()->routeIs('diary.calendar') ? 'active' : '' }}" href="{{ route('diary.calendar') }}">日历</a>
-                <a class="{{ request()->routeIs('diary.export*') ? 'active' : '' }}" href="{{ route('diary.export') }}">导出</a>
+                <a class="{{ request()->routeIs('diary.stats') ? 'active' : '' }}" href="{{ route('diary.stats') }}">统计</a>
+                <a class="{{ request()->routeIs('diary.export', 'diary.import*') ? 'active' : '' }}" href="{{ route('diary.export') }}">导出</a>
                 <a class="{{ request()->routeIs('security.*', 'two-factor.*') ? 'active' : '' }}" href="{{ route('security.index') }}">安全</a>
                 <a class="{{ request()->routeIs('diary.create', 'diary.store') ? 'active' : '' }}" href="{{ route('diary.create') }}">写今天</a>
                 <form method="POST" action="{{ route('logout') }}">

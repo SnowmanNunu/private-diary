@@ -16,7 +16,8 @@ A self-hosted, single-user diary: Markdown writing, tags and full-text search, c
 - **整理**：逗号分隔标签、标签筛选、中文全文搜索（FTS5 trigram，短词用子串兜底）
 - **回顾**：月历视图、去年今日 / 去年同日
 - **附件**：私有图片上传，鉴权路由访问，删除日记时同步清理文件
-- **导出**：Markdown ZIP（按年分目录、图片相对链接、`manifest.json`）与结构化 JSON
+- **导出与导入**：Markdown ZIP（按年分目录、图片相对链接、`manifest.json`）与结构化 JSON；导入支持按日期幂等、冲突策略与图片恢复
+- **统计**：年度篇数/字数/连续天数、写作热力图、每月篇数与常用标签
 - **安全**：单用户、无注册入口、登录限速、会话加密、TOTP 二重验证与一次性恢复码
 - **备份**：SQLite 一致性快照 + 附件打包 + AES-256-GCM 加密 + 异地磁盘，附带恢复演练与审计
 
@@ -93,7 +94,8 @@ php artisan test
 - **Organize**: comma-separated tags, tag filters, Chinese full-text search (SQLite FTS5 trigram with substring fallback)
 - **Reflect**: monthly calendar, "on this day last year" on the list and reading pages
 - **Attachments**: private image uploads served through authenticated routes; files removed with their entry
-- **Export**: Markdown ZIP (yearly folders, relative image links, `manifest.json`) and structured JSON
+- **Export & import**: Markdown ZIP (yearly folders, relative image links, `manifest.json`) and structured JSON; date-based idempotent import with conflict strategies and image restoration
+- **Stats**: annual entry/word counts, streaks, contribution-style heatmap, monthly counts and top tags
 - **Security**: single user, no registration, login throttling, encrypted sessions, TOTP 2FA with one-time recovery codes
 - **Backups**: consistent SQLite snapshot + attachments, AES-256-GCM encryption, off-site disk, restore drills with audit log
 
