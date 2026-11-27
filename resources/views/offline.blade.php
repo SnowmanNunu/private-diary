@@ -87,6 +87,7 @@
         <div class="editor-actions">
             <button type="button" id="local-button" class="primary">保存到本机</button>
             <button type="button" id="sync-button">同步到服务器</button>
+            <a id="relogin-link" class="primary" href="/diary" hidden>去登录</a>
             <span class="muted" id="offline-state"></span>
         </div>
     </main>
@@ -130,6 +131,27 @@
 
     function say(message) { state.textContent = message; }
 
+    function reasonText(reason) {
+        var code = reason.code || 'UNKNOWN';
+        var text;
+        switch (code) {
+            case 'AUTH_REQUIRED': text = '登录状态已失效或尚未完成二重验证'; break;
+            case 'SESSION_EXPIRED': text = '登录会话已过期'; break;
+            case 'NO_TOKEN': text = '本机缺少登录凭证，请先打开一次在线日记'; break;
+            case 'OFFLINE': text = '当前处于离线状态'; break;
+            case 'NETWORK': text = '网络请求失败'; break;
+            case 'BAD_RESPONSE': text = '服务器返回的不是有效数据'; break;
+            case 'HTTP_422': text = '内容未通过校验'; break;
+            case 'HTTP_500': text = '服务器内部错误'; break;
+            default: text = code.indexOf('HTTP_') === 0 ? '服务器返回 ' + code.slice(5) : code;
+        }
+        return reason.detail ? text + '：' + reason.detail : text;
+    }
+
+    function reasonsText(result) {
+        return result.reasons.map(reasonText).join('；');
+    }
+
     function renderList() {
         var draftsById = drafts.all();
         var dates = Object.keys(draftsById).sort().reverse();
@@ -169,7 +191,10 @@
                         load(value);
                         say(value + ' 已用本机内容覆盖服务器版本。');
                     } catch (e) {
-                        say('覆盖失败，请到在线编辑器处理。');
+                        var reason = e && e.code ? reasonText({ code: e.code, detail: e.detail }) : '网络异常';
+                        var needsLogin = e && (e.code === 'AUTH_REQUIRED' || e.code === 'SESSION_EXPIRED');
+                        byId('relogin-link').hidden = !needsLogin;
+                        say('覆盖失败（' + reason + '），' + (needsLogin ? '请点「去登录」后重试。' : '请稍后重试，或到在线编辑器处理。'));
                     }
                 });
                 var discard = document.createElement('button');
@@ -220,12 +245,18 @@
             return;
         }
         say('正在同步…');
+        byId('relogin-link').hidden = true;
         var result = await drafts.syncAll();
         renderList();
-        if (result.expired) say('会话已过期，请重新登录后再同步；草稿仍在本机。');
-        else if (result.conflicts) say(result.conflicts + ' 篇发生版本冲突，内容已保留，请在列表中选择覆盖或删除。');
-        else if (result.failed) say('同步失败 ' + result.failed + ' 篇，草稿仍在本机。');
-        else if (result.total) say('已同步 ' + result.ok + ' 篇。');
+        if (result.expired || result.authRequired) {
+            byId('relogin-link').hidden = false;
+            say('登录状态已失效（已退出、会话过期或未完成二重验证）。点「去登录」重新登录，再回来点同步；草稿仍在本机。');
+        } else if (result.conflicts) {
+            say(result.conflicts + ' 篇发生版本冲突，内容已保留，请在列表中选择覆盖或删除。'
+                + (result.failed ? ' 另有 ' + result.failed + ' 篇未同步：' + reasonsText(result) + '。' : ''));
+        } else if (result.failed) {
+            say('同步失败 ' + result.failed + ' 篇（' + reasonsText(result) + '），草稿仍在本机，可稍后重试。');
+        } else if (result.total) say('已同步 ' + result.ok + ' 篇。');
         else if (drafts.conflicts().length) say('有 ' + drafts.conflicts().length + ' 篇版本冲突待处理。');
         else say('没有待同步的草稿。');
     }

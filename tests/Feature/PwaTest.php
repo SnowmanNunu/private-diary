@@ -21,7 +21,7 @@ class PwaTest extends TestCase
         $this->get('/sw.js')
             ->assertOk()
             ->assertHeader('Service-Worker-Allowed', '/');
-        $this->assertStringContainsString('private-diary-shell-v2', file_get_contents(public_path('sw.js')));
+        $this->assertStringContainsString('private-diary-shell-v3', file_get_contents(public_path('sw.js')));
         $this->assertStringContainsString('SHELL.includes(url.pathname)', file_get_contents(public_path('sw.js')));
     }
 

@@ -77,6 +77,8 @@ SQLite（`storage/database.sqlite`）与附件、日志、缓存一起放在命�
 
 限制：离线草稿只保存文字字段（标题、正文、标签、心情、天气），**不缓存/上传图片**；Service Worker 不会缓存任何日记页面或附件。共用设备请在「离线写作」页清空本机草稿。
 
+**同步失败时**：草稿一直留在本机，不会丢。先看提示括号里的原因——最常见的是「登录状态已失效」（已退出、会话过期或本次会话还没通过二重验证），此时打开「日记」重新登录一次，再回「离线写作」点同步即可；其余原因包括当前离线、网络中断、内容未通过校验（标题/标签过长、心情天气取值异常）、服务器 5xx。若为「版本冲突」，在草稿列表中选择「用本机内容覆盖」或「删除本机副本」，内容均已保留。
+
 ### 安心机制
 
 - **同步冲突防护**：每篇日记带 `revision`。在线编辑器、自动保存与离线草稿同步都会带上打开时的版本号；若服务器版本已变，返回 409 并把新内容存成「冲突副本」，绝不静默覆盖。可在编辑器或离线写作页对比、恢复副本或用本机内容覆盖。
@@ -168,7 +170,7 @@ Visit `http://localhost:8000/login` (`PORT=8080 docker compose up -d` changes th
 
 ### Offline writing (PWA)
 
-Open the site in a supporting browser to register the service worker, then use "Install app" from the browser menu. While offline the editor keeps writing text drafts into `localStorage`; reconnect and sign in to sync them automatically. The "离线写作" page lists local drafts and lets you sync or clear them. Offline drafts contain text fields only (no images), and diary pages/attachments are never cached. Clear local drafts on shared devices.
+Open the site in a supporting browser to register the service worker, then use "Install app" from the browser menu. While offline the editor keeps writing text drafts into `localStorage`; reconnect and sign in to sync them automatically. The "离线写作" page lists local drafts and lets you sync or clear them. Offline drafts contain text fields only (no images), and diary pages/attachments are never cached. Clear local drafts on shared devices. If a sync fails, drafts stay on the device; the message now names the cause (most often an expired login / unverified 2FA session — sign in again at "日记" and retry).
 
 ### Peace of mind
 

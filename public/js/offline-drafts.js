@@ -120,33 +120,79 @@
         return meta && typeof meta === 'object' ? meta : { csrf: '', savedAt: 0 };
     }
 
+    function syncError(code, status, detail) {
+        var error = new Error(code);
+        error.code = code;
+        error.status = status || 0;
+        error.detail = detail || '';
+        return error;
+    }
+
+    function isJson(response) {
+        var type = response.headers.get('content-type') || '';
+        return type.toLowerCase().indexOf('application/json') !== -1;
+    }
+
+    async function readJson(response) {
+        try {
+            return await response.json();
+        } catch (e) {
+            throw syncError('BAD_RESPONSE', response.status);
+        }
+    }
+
+    // 会话过期、已退出登录或二重验证未通过时，Laravel 会把 POST 重定向到
+    // 登录页；fetch 默认跟随重定向后拿到的是 200 的 HTML。若不检查，就会
+    // 走到 response.json() 并抛出解析错误，被误报成「同步失败」。
+    function checkResponse(response) {
+        if (response.redirected || !isJson(response)) {
+            throw syncError('AUTH_REQUIRED', response.status);
+        }
+    }
+
     async function syncOne(draft) {
         var meta = getMeta();
-        if (!meta.csrf) throw new Error('NO_TOKEN');
+        if (!meta.csrf) throw syncError('NO_TOKEN');
         var payload = {};
         FIELDS.forEach(function (field) { payload[field] = draft[field]; });
         payload.autosave = true;
         payload.revision = typeof draft.revision === 'number' ? draft.revision : 0;
 
-        var response = await window.fetch('/diary/' + encodeURIComponent(draft.date), {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': meta.csrf,
-            },
-            body: JSON.stringify(payload),
-        });
+        var response;
+        try {
+            response = await window.fetch('/diary/' + encodeURIComponent(draft.date), {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': meta.csrf,
+                },
+                body: JSON.stringify(payload),
+            });
+        } catch (e) {
+            throw syncError(window.navigator.onLine ? 'NETWORK' : 'OFFLINE');
+        }
+
+        checkResponse(response);
 
         if (response.status === 409) {
-            var info = await response.json().catch(function () { return {}; });
+            var info = await readJson(response);
             markConflict(draft.date, info);
-            throw new Error('CONFLICT');
+            throw syncError('CONFLICT', 409);
         }
-        if (response.status === 419) throw new Error('SESSION_EXPIRED');
-        if (!response.ok) throw new Error('HTTP_' + response.status);
-        var saved = await response.json();
+        if (response.status === 419) throw syncError('SESSION_EXPIRED', 419);
+        // 会话过期时 auth 中间件对 JSON 请求返回 401，而不是重定向。
+        if (response.status === 401 || response.status === 403) {
+            throw syncError('AUTH_REQUIRED', response.status);
+        }
+        if (!response.ok) {
+            var body = null;
+            try { body = await readJson(response); } catch (e) { /* 保留状态码即可 */ }
+            var detail = body && typeof body.message === 'string' ? body.message : '';
+            throw syncError('HTTP_' + response.status, response.status, detail);
+        }
+        var saved = await readJson(response);
         markSynced(draft.date);
         if (saved && typeof saved.revision === 'number') {
             var drafts = all();
@@ -160,20 +206,29 @@
 
     async function syncAll(onProgress) {
         var list = pending();
-        var result = { ok: 0, failed: 0, expired: false, conflicts: 0, total: list.length };
+        var result = {
+            ok: 0, failed: 0, expired: false, authRequired: false,
+            conflicts: 0, total: list.length, reasons: [],
+        };
 
         for (var i = 0; i < list.length; i++) {
             try {
                 await syncOne(list[i]);
                 result.ok++;
             } catch (e) {
-                if (e && e.message === 'CONFLICT') {
+                var code = (e && e.code) || (e && e.message) || 'UNKNOWN';
+                var entry = { code: code, detail: (e && e.detail) || '' };
+                if (!result.reasons.some(function (item) { return item.code === code; })) {
+                    result.reasons.push(entry);
+                }
+                if (code === 'CONFLICT') {
                     result.conflicts++;
                 } else {
                     result.failed++;
                 }
-                if (e && e.message === 'SESSION_EXPIRED') {
-                    result.expired = true;
+                if (code === 'SESSION_EXPIRED' || code === 'AUTH_REQUIRED') {
+                    result.expired = code === 'SESSION_EXPIRED';
+                    result.authRequired = code === 'AUTH_REQUIRED';
                     break;
                 }
             }
@@ -193,19 +248,28 @@
             ? draft.conflictInfo.server_revision
             : (typeof draft.revision === 'number' ? draft.revision : 0);
 
-        var response = await window.fetch('/diary/' + encodeURIComponent(date), {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': getMeta().csrf,
-            },
-            body: JSON.stringify(payload),
-        });
+        var response;
+        try {
+            response = await window.fetch('/diary/' + encodeURIComponent(date), {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': getMeta().csrf,
+                },
+                body: JSON.stringify(payload),
+            });
+        } catch (e) {
+            throw syncError(window.navigator.onLine ? 'NETWORK' : 'OFFLINE');
+        }
 
-        if (!response.ok) throw new Error('HTTP_' + response.status);
-        var saved = await response.json();
+        checkResponse(response);
+        if (response.status === 401 || response.status === 403 || response.status === 419) {
+            throw syncError('AUTH_REQUIRED', response.status);
+        }
+        if (!response.ok) throw syncError('HTTP_' + response.status, response.status);
+        var saved = await readJson(response);
         clearConflict(date, saved.revision);
         markSynced(date);
         return saved;
