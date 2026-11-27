@@ -4,8 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="theme-color" content="#3c6b5e">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="私密日记">
     <title>@yield('title', config('app.name'))</title>
-    <link rel="stylesheet" href="{{ asset('css/app.css') }}?v=3">
+    <link rel="manifest" href="{{ asset('manifest.webmanifest') }}">
+    <link rel="icon" href="{{ asset('icons/icon.svg') }}" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="{{ asset('icons/icon-192.png') }}">
+    <link rel="stylesheet" href="{{ asset('css/app.css') }}?v=4">
 </head>
 <body>
 <div class="shell">
@@ -23,6 +29,8 @@
                 <a class="{{ request()->routeIs('settings.*') ? 'active' : '' }}" href="{{ route('settings.index') }}">设置</a>
                 <a class="{{ request()->routeIs('security.*', 'two-factor.*') ? 'active' : '' }}" href="{{ route('security.index') }}">安全</a>
                 <a class="{{ request()->routeIs('diary.create', 'diary.store') ? 'active' : '' }}" href="{{ route('diary.create') }}">写今天</a>
+                <a class="{{ request()->routeIs('pwa.offline') ? 'active' : '' }}" href="{{ route('pwa.offline') }}">离线写作</a>
+                <span class="pwa-status" id="pwa-status" hidden></span>
                 <form method="POST" action="{{ route('logout') }}">
                     @csrf
                     <button type="submit" class="link-button">退出</button>
@@ -43,6 +51,34 @@
         <footer class="shell-footer">私密日记 · 数据只保存在你自己的空间</footer>
     @endif
 </div>
+<script src="{{ asset('js/offline-drafts.js') }}"></script>
+@if (auth()->check())
+<script>
+(function () {
+    var drafts = window.OfflineDrafts;
+    drafts.setMeta({ csrf: @json(csrf_token()) });
+    drafts.register();
+    drafts.initStatus();
+
+    var syncing = false;
+    async function syncPending() {
+        if (syncing) return;
+        syncing = true;
+        try {
+            var result = await drafts.syncAll();
+            var state = document.getElementById('save-state');
+            if (result.ok > 0 && state) state.textContent = '已同步 ' + result.ok + ' 篇本机草稿。';
+        } finally {
+            syncing = false;
+        }
+    }
+
+    window.addEventListener('online', syncPending);
+    drafts.onSync(syncPending);
+    syncPending();
+})();
+</script>
+@endif
 @stack('scripts')
 </body>
 </html>

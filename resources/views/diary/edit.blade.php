@@ -132,6 +132,8 @@
 <script>
 (function () {
     const token = document.querySelector('meta[name="csrf-token"]').content;
+    const drafts = window.OfflineDrafts;
+    const entryDate = @json($date);
     const form = document.getElementById('editor-form');
     const title = document.getElementById('entry-title');
     const tags = document.getElementById('entry-tags');
@@ -147,6 +149,22 @@
     const attachmentList = document.getElementById('attachment-list');
     let timer = null;
     let previewTimer = null;
+
+    function setRadio(name, value) {
+        document.querySelectorAll('input[name="' + name + '"]').forEach((input) => {
+            input.checked = input.value === value;
+        });
+    }
+
+    const restored = drafts ? drafts.get(entryDate) : null;
+    if (restored && restored.pending) {
+        title.value = restored.title;
+        tags.value = restored.tags;
+        body.value = restored.body;
+        setRadio('mood', restored.mood);
+        setRadio('weather', restored.weather);
+        state.textContent = '已恢复本机草稿（' + new Date(restored.updatedAt).toLocaleString('zh-CN') + '），联网后自动同步。';
+    }
 
     async function postJson(url, payload) {
         const response = await fetch(url, {
@@ -167,22 +185,27 @@
         return checked ? checked.value : '';
     }
 
+    function collect() {
+        return {
+            title: title.value,
+            tags: tags.value,
+            mood: selectedValue('mood'),
+            weather: selectedValue('weather'),
+            body: body.value,
+        };
+    }
+
     function scheduleSave() {
         state.textContent = '正在保存…';
+        if (drafts) drafts.put(entryDate, collect());
         clearTimeout(timer);
         timer = setTimeout(async () => {
             try {
-                const data = await postJson(form.action, {
-                    title: title.value,
-                    tags: tags.value,
-                    mood: selectedValue('mood'),
-                    weather: selectedValue('weather'),
-                    body: body.value,
-                    autosave: true,
-                });
+                const data = await postJson(form.action, Object.assign(collect(), { autosave: true }));
                 state.textContent = '已自动保存 ' + data.saved_at;
             } catch (e) {
-                state.textContent = '自动保存失败，请手动保存。';
+                state.textContent = '当前离线：已存到本机草稿，联网后自动同步。';
+                if (drafts) drafts.requestBackgroundSync();
             }
         }, 1200);
     }
@@ -322,7 +345,15 @@
         }
     });
 
-    form.addEventListener('submit', () => clearTimeout(timer));
+    form.addEventListener('submit', (event) => {
+        clearTimeout(timer);
+        if (drafts && !navigator.onLine) {
+            event.preventDefault();
+            drafts.put(entryDate, collect());
+            state.textContent = '当前离线：已保存到本机草稿。';
+            drafts.requestBackgroundSync();
+        }
+    });
 
     picker.addEventListener('change', () => {
         if (picker.value) window.location.href = '{{ route('diary.create') }}?date=' + picker.value;

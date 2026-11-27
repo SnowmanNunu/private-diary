@@ -13,6 +13,23 @@ use App\Http\Controllers\TwoFactorController;
 use App\Http\Middleware\EnsureTwoFactorIsVerified;
 use Illuminate\Support\Facades\Route;
 
+// PWA shell. These contain no diary data and are safe to cache.
+Route::get('/manifest.webmanifest', fn () => response()->file(public_path('manifest.webmanifest'), [
+    'Content-Type' => 'application/manifest+json',
+    'Cache-Control' => 'public, max-age=3600',
+]))->name('pwa.manifest');
+
+Route::get('/sw.js', fn () => response()->file(public_path('sw.js'), [
+    'Content-Type' => 'application/javascript; charset=utf-8',
+    'Service-Worker-Allowed' => '/',
+    'Cache-Control' => 'no-cache',
+]))->name('pwa.service-worker');
+
+Route::get('/offline', fn () => view('offline', [
+    'moods' => config('diary.moods'),
+    'weathers' => config('diary.weather'),
+]))->name('pwa.offline');
+
 Route::get('/login', [SessionController::class, 'showLogin'])
     ->middleware('guest')
     ->name('login');

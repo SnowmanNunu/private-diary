@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="私密日记">
+  <rect width="512" height="512" rx="112" fill="#2b5146"/>
+  <rect x="138" y="102" width="236" height="308" rx="13" fill="#fffefa"/>
+  <g fill="#7b8a80">
+    <rect x="173" y="194" width="166" height="7" rx="3"/>
+    <rect x="173" y="242" width="166" height="7" rx="3"/>
+    <rect x="173" y="290" width="166" height="7" rx="3"/>
+    <rect x="173" y="338" width="102" height="7" rx="3"/>
+  </g>
+  <path d="M312 101h50v108l-25-18-25 18z" fill="#a98249"/>
+</svg>

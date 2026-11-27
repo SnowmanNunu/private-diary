@@ -1,5 +1,20 @@
 # 更新日志 / Changelog
 
+## [0.5.0] - 2026-11-27
+
+部署与离线版本 / Deployment & offline release.
+
+### Added
+
+- Docker Compose：nginx + PHP-FPM + 定时任务三容器，命名卷持久化 SQLite 与 `storage/`，启动时自动生成密钥并迁移
+- GitHub Actions CI：PHP 8.4 下安装依赖、迁移、运行全套测试、依赖审计与 Docker 镜像构建校验
+- PWA：本地生成的图标与 manifest、Service Worker、离线写作页与本机草稿队列；联网登录后按日期幂等同步
+- 4 项 PWA 测试，全套 71 项测试通过
+
+### Security
+
+- Service Worker 只缓存公开静态资源白名单；日记正文、附件、搜索结果与所有非 GET 请求不进入缓存
+
 ## [0.4.0] - 2026-11-27
 
 配置与体验版本 / Configuration & polish release.
