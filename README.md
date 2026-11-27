@@ -52,35 +52,27 @@ php artisan test
 
 1. 登录后到「安全」页启用 TOTP，并**离线保存恢复码**。
 2. 生成备份口令并**离线保存**；丢失后无法恢复任何备份：
-
    ```bash
    # 写入随机口令到 .env 的 BACKUP_PASSPHRASE
    php -r '$f=".env"; $s=file_get_contents($f); $s=preg_replace("/^BACKUP_PASSPHRASE=.*$/m", "BACKUP_PASSPHRASE=".bin2hex(random_bytes(24)), $s); file_put_contents($f,$s);'
    ```
-
 3. 异地存储：把 `.env` 中的 `BACKUP_DISK` 设为 `s3`，并填写以下项（兼容 AWS S3、腾讯云 COS、Cloudflare R2、MinIO 等）：
-
-   | 变量 | 说明 |
-   |---|---|
-   | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | 访问密钥 |
-   | `AWS_BUCKET` | 桶名 |
-   | `AWS_DEFAULT_REGION` | 区域（R2 用 `auto`） |
-   | `AWS_ENDPOINT` | 兼容服务的端点，原生 S3 可留空 |
-   | `AWS_USE_PATH_STYLE_ENDPOINT` | MinIO 等通常设为 `true` |
-
+   | 变量                                            | 说明                 |
+   | --------------------------------------------- | ------------------ |
+   | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | 访问密钥               |
+   | `AWS_BUCKET`                                  | 桶名                 |
+   | `AWS_DEFAULT_REGION`                          | 区域（R2 用 `auto`）    |
+   | `AWS_ENDPOINT`                                | 兼容服务的端点，原生 S3 可留空  |
+   | `AWS_USE_PATH_STYLE_ENDPOINT`                 | MinIO 等通常设为 `true` |
 4. 手动验证备份链路：
-
    ```bash
    php artisan diary:backup
    php artisan diary:backup:verify        # 可加 --file= 指定某份备份
    ```
-
 5. 配置系统 cron 以启用每日 03:00 备份、每季度 1 日 04:00 恢复演练：
-
    ```cron
    * * * * * cd /path/to/private-diary && php artisan schedule:run >> /dev/null 2>&1
    ```
-
 6. 生产环境请使用 HTTPS，并确认 Web 服务器不会把 `storage/`、`database/` 暴露到公网。`.env`、SQLite 文件、私密附件与备份均已被 `.gitignore` 排除。
 
 ### 贡献
@@ -138,11 +130,9 @@ php artisan test
 - For off-site backups set `BACKUP_DISK=s3` and fill in `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_BUCKET`, `AWS_DEFAULT_REGION`, `AWS_ENDPOINT` (S3-compatible services) and `AWS_USE_PATH_STYLE_ENDPOINT` (usually `true` for MinIO).
 - Verify manually with `php artisan diary:backup` and `php artisan diary:backup:verify`.
 - Add a system cron for the daily backup and quarterly restore drill:
-
   ```cron
   * * * * * cd /path/to/private-diary && php artisan schedule:run >> /dev/null 2>&1
   ```
-
 - Use HTTPS in production and never expose `storage/` or `database/` publicly. `.env`, SQLite files, private attachments and backups are gitignored.
 
 ### Contributing & license
